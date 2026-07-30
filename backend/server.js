@@ -14,6 +14,8 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const seedSuperAdmin = require('./utils/seedSuperAdmin');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const chatRoutes = require('./routes/chat');
+const { initChatSocket } = require('./socket/chatSocket');
 
 // Verify environment variables are present (log presence, not actual values)
 const requiredEnvVars = [
@@ -70,17 +72,12 @@ mongoose.connect(MONGODB_URI)
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Socket.io connection logic
-io.on('connection', (socket) => {
-  console.log(`Socket connected: ${socket.id}`);
-  
-  socket.on('disconnect', () => {
-    console.log(`Socket disconnected: ${socket.id}`);
-  });
-});
+initChatSocket(io);
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/chat', chatRoutes);
 
 // GET /api/health returning { status: "ok", uptime: process.uptime() }
 app.get('/api/health', (req, res) => {
