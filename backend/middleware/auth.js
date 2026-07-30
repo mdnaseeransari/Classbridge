@@ -28,9 +28,12 @@ async function authenticate(req, res, next) {
     }
 
     // Fetch a fresh copy from DB so bans/status changes take effect immediately
-    const user = await User.findById(decoded.id).select('_id role status isLocked');
+    const user = await User.findById(decoded.id).select('_id role status isLocked isBanned');
     if (!user) {
       return res.status(401).json({ error: 'User not found.' });
+    }
+    if (user.isBanned) {
+      return res.status(403).json({ error: 'Your account has been banned. Contact an administrator.' });
     }
     if (user.status === 'rejected') {
       return res.status(403).json({ error: 'Your account has been rejected.' });

@@ -98,6 +98,14 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    // Set to true when an admin/superadmin explicitly bans the user.
+    // Separate from isLocked (login lockout) — ban is a deliberate admin action,
+    // lockout is automatic after failed attempts.
+    isBanned: {
+      type: Boolean,
+      default: false,
+    },
+
     // Tracks who approved/rejected/locked/unlocked this user and when.
     // Populated by admin action; null until an action is taken.
     actionLog: [

@@ -13,6 +13,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 // Utils & routes
 const seedSuperAdmin = require('./utils/seedSuperAdmin');
 const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 
 // Verify environment variables are present (log presence, not actual values)
 const requiredEnvVars = [
@@ -79,6 +80,7 @@ io.on('connection', (socket) => {
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // GET /api/health returning { status: "ok", uptime: process.uptime() }
 app.get('/api/health', (req, res) => {
