@@ -1,0 +1,62 @@
+const express = require('express');
+const rateLimit = require('express-rate-limit');
+const { signup, loginTeacherStudent, loginAdmin, getMe } = require('../controllers/authController');
+const { authenticate } = require('../middleware/auth');
+
+const router = express.Router();
+
+// ─── Login-specific rate limiter ──────────────────────────────────────────────
+// 5 attempts per 15 minutes per IP address.
+// This is the IP-level guard; per-account lockout is handled inside the controller.
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  standardHeaders: true, // Return rate limit info in the RateLimit-* headers
+  legacyHeaders: false,
+  message: {
+    error:
+      'Too many login attempts from this IP address. ' +
+      'Please try again after 15 minutes.',
+  },
+  // Don't count requests that result in successful logins against the limit
+  skipSuccessfulRequests: true,
+});
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+/**
+ * @route   POST /api/auth/signup
+ * @desc    Self-registration for Teacher and Student accounts.
+ *          Created with status "pending"; requires admin approval to log in.
+ * @access  Public
+ * @body    { name, phone, pin, role: 'teacher'|'student', subject?, classGrade? }
+ */
+router.post('/signup', signup);
+
+/**
+ * @route   POST /api/auth/login/teacher-student
+ * @desc    Login for Teacher and Student via phone number + 6-digit PIN.
+ *          Returns a JWT on success. Locks account after 5 failed attempts.
+ * @access  Public (rate limited: 5 attempts / 15 min per IP)
+ * @body    { phone, pin }
+ */
+router.post('/login/teacher-student', loginRateLimiter, loginTeacherStudent);
+
+/**
+ * @route   POST /api/auth/login/admin
+ * @desc    Login for Admin and Super Admin via email + password.
+ *          Returns a JWT on success. Locks account after 5 failed attempts.
+ * @access  Public (rate limited: 5 attempts / 15 min per IP)
+ * @body    { email, password }
+ */
+router.post('/login/admin', loginRateLimiter, loginAdmin);
+
+/**
+ * @route   GET /api/auth/me
+ * @desc    Returns the currently authenticated user's profile.
+ *          Phone is excluded unless the caller is an admin/superadmin.
+ * @access  Private (requires valid JWT)
+ */
+router.get('/me', authenticate, getMe);
+
+module.exports = router;

@@ -10,6 +10,10 @@ const path = require('path');
 // Load environment variables from the workspace root directory
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
+// Utils & routes
+const seedSuperAdmin = require('./utils/seedSuperAdmin');
+const authRoutes = require('./routes/auth');
+
 // Verify environment variables are present (log presence, not actual values)
 const requiredEnvVars = [
   'MONGODB_URI',
@@ -57,7 +61,11 @@ app.use('/api/', limiter);
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/classbridge';
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Successfully connected to MongoDB.'))
+  .then(async () => {
+    console.log('Successfully connected to MongoDB.');
+    // Seed Super Admin on first start (idempotent — skips if already exists)
+    await seedSuperAdmin();
+  })
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Socket.io connection logic
@@ -68,6 +76,9 @@ io.on('connection', (socket) => {
     console.log(`Socket disconnected: ${socket.id}`);
   });
 });
+
+// ─── API Routes ───────────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
 
 // GET /api/health returning { status: "ok", uptime: process.uptime() }
 app.get('/api/health', (req, res) => {

@@ -3,6 +3,11 @@ const bcrypt = require('bcrypt');
 
 const SALT_ROUNDS = 12;
 
+// Roles that authenticate via phone + PIN
+const PHONE_PIN_ROLES = ['teacher', 'student'];
+// Roles that authenticate via email + password
+const EMAIL_PASSWORD_ROLES = ['superadmin', 'admin'];
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -13,19 +18,35 @@ const userSchema = new mongoose.Schema(
       maxlength: [100, 'Name must not exceed 100 characters.'],
     },
 
+    // ── Teacher / Student credentials ──────────────────────────────────────────
     phone: {
       type: String,
-      required: [true, 'Phone number is required.'],
-      unique: true,
       trim: true,
       match: [/^\+?[1-9]\d{6,14}$/, 'Please provide a valid phone number.'],
+      // Required only for teacher/student; validated in controller for those roles.
+      default: null,
     },
 
     pin: {
       type: String,
-      required: [true, 'PIN is required.'],
-      // Raw value is a 6-digit string; stored as bcrypt hash.
-      // Validation of the raw format is done at the controller level before hashing.
+      // Raw value must be a 6-digit string; validated & hashed in controller before save.
+      default: null,
+    },
+
+    // ── Admin / Super Admin credentials ─────────────────────────────────────────
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid email address.'],
+      // Required only for admin/superadmin; validated in controller for those roles.
+      default: null,
+    },
+
+    password: {
+      type: String,
+      // Stored as bcrypt hash. Raw format validated in controller before hashing.
+      default: null,
     },
 
     role: {
@@ -107,18 +128,21 @@ const userSchema = new mongoose.Schema(
 );
 
 // ─── Indexes ───────────────────────────────────────────────────────────────────
-// phone uniqueness is enforced by the unique: true above; this explicit index
-// also speeds up login lookups by phone.
-userSchema.index({ phone: 1 });
+// sparse: true allows multiple documents to have phone: null without violating uniqueness.
+userSchema.index({ phone: 1 }, { unique: true, sparse: true });
+// sparse: true allows multiple documents to have email: null (all teacher/student rows).
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ role: 1, status: 1 }); // supports admin "filter by role/status" queries
 
-// ─── Pre-save hook: hash PIN before storing ────────────────────────────────────
+// ─── Pre-save hook: hash PIN and/or password before storing ──────────────────
 userSchema.pre('save', async function (next) {
-  // Only re-hash if the pin field was actually modified (avoids double-hashing on other saves)
-  if (!this.isModified('pin')) return next();
-
   try {
-    this.pin = await bcrypt.hash(this.pin, SALT_ROUNDS);
+    if (this.isModified('pin') && this.pin) {
+      this.pin = await bcrypt.hash(this.pin, SALT_ROUNDS);
+    }
+    if (this.isModified('password') && this.password) {
+      this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
+    }
     return next();
   } catch (err) {
     return next(err);
@@ -131,7 +155,18 @@ userSchema.pre('save', async function (next) {
  * @returns {Promise<boolean>} true if the PIN matches, false otherwise.
  */
 userSchema.methods.comparePin = async function (candidatePin) {
-  return bcrypt.compare(candidatePin, this.pin);
+  if (!this.pin) return false;
+  return bcrypt.compare(String(candidatePin), this.pin);
+};
+
+// ─── Instance method: compare a candidate password against the stored hash ─────
+/**
+ * @param {string} candidatePassword - The raw password provided at login.
+ * @returns {Promise<boolean>} true if the password matches, false otherwise.
+ */
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.password) return false;
+  return bcrypt.compare(String(candidatePassword), this.password);
 };
 
 // ─── Instance method: validate role-specific fields ───────────────────────────
@@ -158,12 +193,16 @@ userSchema.methods.validateRoleFields = function () {
  * @param {boolean} isAdmin - If true, phone IS included (admin view). Default false.
  */
 userSchema.statics.safeProjection = function (isAdmin = false) {
-  const projection = { pin: 0, __v: 0 };
+  const projection = { pin: 0, password: 0, __v: 0 };
   if (!isAdmin) {
     projection.phone = 0;
   }
   return projection;
 };
+
+// ─── Exported role helpers ──────────────────────────────────────────────────
+userSchema.statics.PHONE_PIN_ROLES = PHONE_PIN_ROLES;
+userSchema.statics.EMAIL_PASSWORD_ROLES = EMAIL_PASSWORD_ROLES;
 
 const User = mongoose.model('User', userSchema);
 
