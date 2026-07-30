@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const GroupInvite = require('../models/GroupInvite');
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -23,8 +24,8 @@ function canDirectChat(roleA, roleB) {
  */
 function senderProjection(callerRole) {
   return isAdmin(callerRole)
-    ? 'name role email phone'       // admin sees phone
-    : 'name role';                  // teacher/student sees no phone
+    ? 'name role email phone subject classGrade'       // admin sees phone & details
+    : 'name role subject classGrade';                  // teacher/student sees no phone or email
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,4 +228,357 @@ async function getMessages(req, res) {
   }
 }
 
-module.exports = { getOrCreateDirect, listConversations, getConversation, getMessages };
+// ─────────────────────────────────────────────────────────────────────────────
+// GROUP CHAT ENDPOINTS (Admin / Super Admin Only for management)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/chat/groups
+ * Create a new group chat. ONLY Admin or Super Admin can create groups.
+ * Groups can contain a mix of Teachers and Students.
+ */
+async function createGroup(req, res) {
+  try {
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+
+    if (!isAdmin(callerRole)) {
+      return res.status(403).json({ error: 'Only Admins and Super Admins can create group chats.' });
+    }
+
+    const { name, participantIds = [] } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Group name is required.' });
+    }
+
+    // Combine creator with unique provided participant IDs
+    const memberSet = new Set([callerId, ...participantIds]);
+    const memberArray = Array.from(memberSet);
+
+    // Validate that all added members exist and are approved
+    const validUsers = await User.find({
+      _id: { $in: memberArray },
+      status: 'approved',
+      isBanned: false,
+    }).select('_id');
+
+    const validUserIds = validUsers.map((u) => u._id.toString());
+
+    const conversation = await Conversation.create({
+      type: 'group',
+      name: String(name).trim(),
+      groupAdmin: callerId,
+      participants: validUserIds,
+      createdBy: callerId,
+    });
+
+    await conversation.populate('participants', senderProjection(callerRole));
+
+    return res.status(201).json({ conversation });
+  } catch (err) {
+    console.error('[CHAT] createGroup error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * PATCH /api/chat/groups/:id
+ * Rename a group chat. ONLY Admin or Super Admin can rename groups.
+ */
+async function updateGroup(req, res) {
+  try {
+    const callerRole = req.user.role;
+    if (!isAdmin(callerRole)) {
+      return res.status(403).json({ error: 'Only Admins and Super Admins can update group chats.' });
+    }
+
+    const { name } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Group name is required.' });
+    }
+
+    const conversation = await Conversation.findOne({ _id: req.params.id, type: 'group' });
+    if (!conversation) {
+      return res.status(404).json({ error: 'Group conversation not found.' });
+    }
+
+    conversation.name = String(name).trim();
+    await conversation.save();
+
+    await conversation.populate('participants', senderProjection(callerRole));
+
+    return res.status(200).json({ conversation });
+  } catch (err) {
+    console.error('[CHAT] updateGroup error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * DELETE /api/chat/groups/:id
+ * Delete a group chat. ONLY Admin or Super Admin can delete groups.
+ */
+async function deleteGroup(req, res) {
+  try {
+    const callerRole = req.user.role;
+    if (!isAdmin(callerRole)) {
+      return res.status(403).json({ error: 'Only Admins and Super Admins can delete group chats.' });
+    }
+
+    const conversation = await Conversation.findOneAndDelete({ _id: req.params.id, type: 'group' });
+    if (!conversation) {
+      return res.status(404).json({ error: 'Group conversation not found.' });
+    }
+
+    // Clean up associated messages
+    await Message.deleteMany({ conversation: req.params.id });
+    // Revoke any active invites
+    await GroupInvite.updateMany({ conversation: req.params.id }, { isActive: false });
+
+    return res.status(200).json({ message: 'Group deleted successfully.' });
+  } catch (err) {
+    console.error('[CHAT] deleteGroup error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * POST /api/chat/groups/:id/members
+ * Add members to a group chat. ONLY Admin or Super Admin can add members.
+ */
+async function addGroupMembers(req, res) {
+  try {
+    const callerRole = req.user.role;
+    if (!isAdmin(callerRole)) {
+      return res.status(403).json({ error: 'Only Admins and Super Admins can add members to a group.' });
+    }
+
+    const { userIds = [] } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'userIds array is required.' });
+    }
+
+    const conversation = await Conversation.findOne({ _id: req.params.id, type: 'group' });
+    if (!conversation) {
+      return res.status(404).json({ error: 'Group conversation not found.' });
+    }
+
+    // Filter valid approved, non-banned users
+    const validUsers = await User.find({
+      _id: { $in: userIds },
+      status: 'approved',
+      isBanned: false,
+    }).select('_id');
+
+    const existingSet = new Set(conversation.participants.map((p) => p.toString()));
+    validUsers.forEach((u) => existingSet.add(u._id.toString()));
+
+    conversation.participants = Array.from(existingSet);
+    await conversation.save();
+
+    await conversation.populate('participants', senderProjection(callerRole));
+
+    return res.status(200).json({ conversation });
+  } catch (err) {
+    console.error('[CHAT] addGroupMembers error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * DELETE /api/chat/groups/:id/members/:userId
+ * Remove a member from a group. ONLY Admin or Super Admin can remove members.
+ */
+async function removeGroupMember(req, res) {
+  try {
+    const callerRole = req.user.role;
+    if (!isAdmin(callerRole)) {
+      return res.status(403).json({ error: 'Only Admins and Super Admins can remove group members.' });
+    }
+
+    const conversation = await Conversation.findOne({ _id: req.params.id, type: 'group' });
+    if (!conversation) {
+      return res.status(404).json({ error: 'Group conversation not found.' });
+    }
+
+    const { userId } = req.params;
+    conversation.participants = conversation.participants.filter(
+      (p) => p.toString() !== userId
+    );
+    await conversation.save();
+
+    await conversation.populate('participants', senderProjection(callerRole));
+
+    return res.status(200).json({ conversation });
+  } catch (err) {
+    console.error('[CHAT] removeGroupMember error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * GET /api/chat/groups/:id/members
+ * Fetch full list of members in a group.
+ * Phone numbers are ONLY included if caller is Admin or Super Admin.
+ */
+async function getGroupMembers(req, res) {
+  try {
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+
+    const conversation = await Conversation.findOne({ _id: req.params.id, type: 'group' })
+      .populate('participants', senderProjection(callerRole));
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Group conversation not found.' });
+    }
+
+    const isParticipant = conversation.participants.some(
+      (p) => p._id.toString() === callerId
+    );
+    if (!isParticipant && !isAdmin(callerRole)) {
+      return res.status(403).json({ error: 'You are not a member of this group.' });
+    }
+
+    return res.status(200).json({ members: conversation.participants });
+  } catch (err) {
+    console.error('[CHAT] getGroupMembers error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * POST /api/chat/groups/:id/invites
+ * Generate a shareable invite link for a group. ONLY Admin or Super Admin.
+ * Body: { expiresHours, maxUses }
+ */
+async function createInviteLink(req, res) {
+  try {
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+
+    if (!isAdmin(callerRole)) {
+      return res.status(403).json({ error: 'Only Admins and Super Admins can generate invite links.' });
+    }
+
+    const conversation = await Conversation.findOne({ _id: req.params.id, type: 'group' });
+    if (!conversation) {
+      return res.status(404).json({ error: 'Group conversation not found.' });
+    }
+
+    const { expiresHours, maxUses } = req.body;
+
+    let expiresAt = null;
+    if (expiresHours && Number(expiresHours) > 0) {
+      expiresAt = new Date(Date.now() + Number(expiresHours) * 60 * 60 * 1000);
+    }
+
+    let parsedMaxUses = null;
+    if (maxUses && Number(maxUses) > 0) {
+      parsedMaxUses = parseInt(maxUses, 10);
+    }
+
+    const invite = await GroupInvite.create({
+      conversation: req.params.id,
+      createdBy: callerId,
+      expiresAt,
+      maxUses: parsedMaxUses,
+    });
+
+    return res.status(201).json({
+      invite: {
+        code: invite.code,
+        expiresAt: invite.expiresAt,
+        maxUses: invite.maxUses,
+        usesCount: invite.usesCount,
+        createdAt: invite.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error('[CHAT] createInviteLink error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * POST /api/chat/groups/join/:code
+ * Join a group using an invite code.
+ * Rejects if user is not approved, or is banned, or is locked.
+ */
+async function joinViaInvite(req, res) {
+  try {
+    const user = req.user;
+
+    // Explicit security check: user MUST be approved, NOT banned, NOT locked
+    if (user.status !== 'approved') {
+      return res.status(403).json({ error: 'Your account status must be approved to join groups.' });
+    }
+    if (user.isBanned) {
+      return res.status(403).json({ error: 'Banned accounts cannot join groups.' });
+    }
+    if (user.isLocked) {
+      return res.status(403).json({ error: 'Locked accounts cannot join groups until unlocked by an Admin.' });
+    }
+
+    const { code } = req.params;
+    const invite = await GroupInvite.findOne({ code, isActive: true });
+    if (!invite) {
+      return res.status(404).json({ error: 'Invalid or inactive invite link.' });
+    }
+
+    // Check expiry
+    if (invite.expiresAt && new Date() > invite.expiresAt) {
+      return res.status(410).json({ error: 'This invite link has expired.' });
+    }
+
+    // Check max uses
+    if (invite.maxUses !== null && invite.usesCount >= invite.maxUses) {
+      return res.status(410).json({ error: 'This invite link has reached its maximum number of uses.' });
+    }
+
+    const conversation = await Conversation.findOne({ _id: invite.conversation, type: 'group' });
+    if (!conversation) {
+      return res.status(404).json({ error: 'Group conversation no longer exists.' });
+    }
+
+    // Add user to participants if not already present
+    const userIdStr = user.id.toString();
+    const isAlreadyMember = conversation.participants.some((p) => p.toString() === userIdStr);
+
+    if (!isAlreadyMember) {
+      conversation.participants.push(user.id);
+      await conversation.save();
+
+      // Track usage
+      invite.usesCount += 1;
+      invite.usedBy.push({ user: user.id, usedAt: new Date() });
+      await invite.save();
+    }
+
+    await conversation.populate('participants', senderProjection(user.role));
+
+    return res.status(200).json({
+      message: isAlreadyMember ? 'You are already a member of this group.' : 'Successfully joined group.',
+      conversation,
+    });
+  } catch (err) {
+    console.error('[CHAT] joinViaInvite error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+module.exports = {
+  getOrCreateDirect,
+  listConversations,
+  getConversation,
+  getMessages,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  addGroupMembers,
+  removeGroupMember,
+  getGroupMembers,
+  createInviteLink,
+  joinViaInvite,
+};

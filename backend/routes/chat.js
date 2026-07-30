@@ -5,6 +5,14 @@ const {
   listConversations,
   getConversation,
   getMessages,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  addGroupMembers,
+  removeGroupMember,
+  getGroupMembers,
+  createInviteLink,
+  joinViaInvite,
 } = require('../controllers/chatController');
 
 const router = express.Router();
@@ -40,6 +48,66 @@ router.get('/conversations', listConversations);
  * @access  Any approved user (participant only)
  */
 router.get('/conversations/:id', getConversation);
+
+// ─── Group Management (Admin / Super Admin ONLY) ──────────────────────────────
+
+/**
+ * @route   POST /api/chat/groups
+ * @desc    Create a new group chat (mixed Teachers and Students).
+ * @access  Admin / Super Admin only
+ */
+router.post('/groups', createGroup);
+
+/**
+ * @route   PATCH /api/chat/groups/:id
+ * @desc    Rename a group chat.
+ * @access  Admin / Super Admin only
+ */
+router.patch('/groups/:id', updateGroup);
+
+/**
+ * @route   DELETE /api/chat/groups/:id
+ * @desc    Delete a group chat.
+ * @access  Admin / Super Admin only
+ */
+router.delete('/groups/:id', deleteGroup);
+
+/**
+ * @route   POST /api/chat/groups/:id/members
+ * @desc    Add members to a group chat.
+ * @access  Admin / Super Admin only
+ */
+router.post('/groups/:id/members', addGroupMembers);
+
+/**
+ * @route   DELETE /api/chat/groups/:id/members/:userId
+ * @desc    Remove a member from a group chat.
+ * @access  Admin / Super Admin only
+ */
+router.delete('/groups/:id/members/:userId', removeGroupMember);
+
+/**
+ * @route   GET /api/chat/groups/:id/members
+ * @desc    Get member list for a group. Omits phone numbers for non-admin callers.
+ * @access  Group participant or Admin / Super Admin
+ */
+router.get('/groups/:id/members', getGroupMembers);
+
+// ─── Group Invite Links ───────────────────────────────────────────────────────
+
+/**
+ * @route   POST /api/chat/groups/:id/invites
+ * @desc    Generate a shareable invite link with optional expiry/max-uses.
+ * @access  Admin / Super Admin only
+ */
+router.post('/groups/:id/invites', createInviteLink);
+
+/**
+ * @route   POST /api/chat/groups/join/:code
+ * @desc    Redeem an invite code to join a group. Account must be approved & non-banned.
+ * @access  Any approved, non-banned authenticated user
+ */
+router.post('/groups/join/:code', joinViaInvite);
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
