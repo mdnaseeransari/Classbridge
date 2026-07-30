@@ -1,0 +1,83 @@
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+
+// Load environment variables from the workspace root directory
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
+// Verify environment variables are present (log presence, not actual values)
+const requiredEnvVars = [
+  'MONGODB_URI',
+  'CLOUDINARY_CLOUD_NAME',
+  'CLOUDINARY_API_KEY',
+  'CLOUDINARY_API_SECRET',
+  'JWT_SECRET',
+  'SUPER_ADMIN_EMAIL',
+  'SUPER_ADMIN_PASSWORD'
+];
+
+console.log('--- Environment Verification ---');
+requiredEnvVars.forEach(envVar => {
+  if (process.env[envVar]) {
+    console.log(`[OK] ${envVar} is configured.`);
+  } else {
+    console.warn(`[WARNING] ${envVar} is missing or undefined!`);
+  }
+});
+console.log('--------------------------------');
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Middlewares
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Rate Limiter for API endpoints
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes.' }
+});
+app.use('/api/', limiter);
+
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/classbridge';
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('Successfully connected to MongoDB.'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
+// Socket.io connection logic
+io.on('connection', (socket) => {
+  console.log(`Socket connected: ${socket.id}`);
+  
+  socket.on('disconnect', () => {
+    console.log(`Socket disconnected: ${socket.id}`);
+  });
+});
+
+// GET /api/health returning { status: "ok", uptime: process.uptime() }
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime()
+  });
+});
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`ClassBridge backend server running on port ${PORT}`);
+});
