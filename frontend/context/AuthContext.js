@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import storage from '../services/storage';
 import api from '../services/api';
 
 export const AuthContext = createContext();
@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       setLoading(true);
-      const storedToken = await SecureStore.getItemAsync('userToken');
+      const storedToken = await storage.getItem('userToken');
       if (storedToken) {
         setToken(storedToken);
         // Verify token & fetch user profile
@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('[AUTH_CONTEXT] Auth restore failed:', err?.response?.data || err.message);
       // Token invalid or expired — clear stored state
-      await SecureStore.deleteItemAsync('userToken');
+      await storage.deleteItem('userToken');
       setToken(null);
       setUser(null);
     } finally {
@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await api.post('/auth/login/teacher-student', { phone, pin });
       const { token: newToken, user: userData } = res.data;
-      await SecureStore.setItemAsync('userToken', newToken);
+      await storage.setItem('userToken', newToken);
       setToken(newToken);
       setUser(userData);
       return { success: true, user: userData };
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await api.post('/auth/login/admin', { email, password });
       const { token: newToken, user: userData } = res.data;
-      await SecureStore.setItemAsync('userToken', newToken);
+      await storage.setItem('userToken', newToken);
       setToken(newToken);
       setUser(userData);
       return { success: true, user: userData };
@@ -84,7 +84,7 @@ export const AuthProvider = ({ children }) => {
   // Logout action
   const logout = async () => {
     try {
-      await SecureStore.deleteItemAsync('userToken');
+      await storage.deleteItem('userToken');
     } catch (e) {
       console.error('[AUTH_CONTEXT] Error clearing token:', e);
     } finally {
