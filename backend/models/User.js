@@ -24,7 +24,6 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/^\+?[1-9]\d{6,14}$/, 'Please provide a valid phone number.'],
       // Required only for teacher/student; validated in controller for those roles.
-      default: null,
     },
 
     pin: {
@@ -40,7 +39,6 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid email address.'],
       // Required only for admin/superadmin; validated in controller for those roles.
-      default: null,
     },
 
     password: {
