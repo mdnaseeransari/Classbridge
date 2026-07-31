@@ -3,6 +3,8 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const GroupInvite = require('../models/GroupInvite');
 const { uploadToCloudinary } = require('../utils/cloudinary');
+const { sendExpoPushNotifications } = require('../utils/pushNotifications');
+const { userIsOnline } = require('../socket/chatSocket');
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -276,6 +278,31 @@ async function createGroup(req, res) {
 
     await conversation.populate('participants', senderProjection(callerRole));
 
+    // ── Push Notification Trigger for Added Members ─────────────────────
+    (async () => {
+      try {
+        const addedMemberIds = validUserIds.filter((id) => id !== callerId);
+        if (addedMemberIds.length > 0) {
+          const targetUsers = await User.find({
+            _id: { $in: addedMemberIds },
+            expoPushToken: { $ne: null },
+          }).select('expoPushToken');
+
+          const senderName = req.user.name || 'Admin';
+          const pushPayloads = targetUsers.map((u) => ({
+            to: u.expoPushToken,
+            title: senderName,
+            body: `Added you to group "${conversation.name}"`,
+            data: { conversationId: conversation._id, type: 'group_added' },
+          }));
+
+          await sendExpoPushNotifications(pushPayloads);
+        }
+      } catch (pushErr) {
+        console.error('[CHAT] createGroup push notification error:', pushErr);
+      }
+    })();
+
     return res.status(201).json({ conversation });
   } catch (err) {
     console.error('[CHAT] createGroup error:', err);
@@ -373,12 +400,40 @@ async function addGroupMembers(req, res) {
     }).select('_id');
 
     const existingSet = new Set(conversation.participants.map((p) => p.toString()));
+    const newlyAddedIds = validUsers
+      .map((u) => u._id.toString())
+      .filter((id) => !existingSet.has(id));
+
     validUsers.forEach((u) => existingSet.add(u._id.toString()));
 
     conversation.participants = Array.from(existingSet);
     await conversation.save();
 
     await conversation.populate('participants', senderProjection(callerRole));
+
+    // ── Push Notification Trigger for Newly Added Members ───────────────
+    (async () => {
+      try {
+        if (newlyAddedIds.length > 0) {
+          const targetUsers = await User.find({
+            _id: { $in: newlyAddedIds },
+            expoPushToken: { $ne: null },
+          }).select('expoPushToken');
+
+          const senderName = req.user.name || 'Admin';
+          const pushPayloads = targetUsers.map((u) => ({
+            to: u.expoPushToken,
+            title: senderName,
+            body: `Added you to group "${conversation.name}"`,
+            data: { conversationId: conversation._id, type: 'group_added' },
+          }));
+
+          await sendExpoPushNotifications(pushPayloads);
+        }
+      } catch (pushErr) {
+        console.error('[CHAT] addGroupMembers push notification error:', pushErr);
+      }
+    })();
 
     return res.status(200).json({ conversation });
   } catch (err) {
@@ -630,6 +685,34 @@ async function sendFileAttachment(req, res) {
     });
 
     await message.populate('sender', senderProjection(callerRole));
+
+    // ── Push Notification Trigger for Offline Participants ───────────────
+    (async () => {
+      try {
+        const offlineRecipientIds = conversation.participants.filter(
+          (pId) => pId.toString() !== callerId && !userIsOnline(pId.toString())
+        );
+
+        if (offlineRecipientIds.length > 0) {
+          const offlineUsers = await User.find({
+            _id: { $in: offlineRecipientIds },
+            expoPushToken: { $ne: null },
+          }).select('expoPushToken');
+
+          const senderName = req.user.name || 'Someone';
+          const pushPayloads = offlineUsers.map((u) => ({
+            to: u.expoPushToken,
+            title: senderName,
+            body: `Sent an attachment: ${req.file.originalname}`,
+            data: { conversationId: conversation._id, type: 'new_message' },
+          }));
+
+          await sendExpoPushNotifications(pushPayloads);
+        }
+      } catch (pushErr) {
+        console.error('[CHAT] sendFileAttachment push notification error:', pushErr);
+      }
+    })();
 
     return res.status(201).json({ message });
   } catch (err) {

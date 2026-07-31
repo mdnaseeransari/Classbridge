@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const { sendExpoPushNotifications } = require('../utils/pushNotifications');
 
 // ─── Role helpers (same logic as chatController — kept local to avoid circular deps) ──
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -206,6 +207,34 @@ function initChatSocket(io) {
 
         // Emit to everyone in the room (including sender)
         io.to(conversationId).emit('message_received', payload);
+
+        // ── Push Notification Trigger for Offline Participants ───────────────
+        (async () => {
+          try {
+            const offlineRecipientIds = conversation.participants.filter(
+              (pId) => pId.toString() !== userId && !userIsOnline(pId.toString())
+            );
+
+            if (offlineRecipientIds.length > 0) {
+              const offlineUsers = await User.find({
+                _id: { $in: offlineRecipientIds },
+                expoPushToken: { $ne: null },
+              }).select('expoPushToken');
+
+              const senderName = socket.userData.name;
+              const pushPayloads = offlineUsers.map((u) => ({
+                to: u.expoPushToken,
+                title: senderName,
+                body: message.type === 'file' ? `Sent an attachment: ${message.fileName || 'file'}` : trimmedContent,
+                data: { conversationId, type: 'new_message' },
+              }));
+
+              await sendExpoPushNotifications(pushPayloads);
+            }
+          } catch (pushErr) {
+            console.error('[SOCKET] push notification error:', pushErr);
+          }
+        })();
 
         if (typeof ack === 'function') ack({ success: true, messageId: message._id });
       } catch (err) {

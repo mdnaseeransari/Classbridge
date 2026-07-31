@@ -1,6 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { signup, loginTeacherStudent, loginAdmin, getMe } = require('../controllers/authController');
+const { signup, loginTeacherStudent, loginAdmin, getMe, updatePushToken } = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -58,5 +58,13 @@ router.post('/login/admin', loginRateLimiter, loginAdmin);
  * @access  Private (requires valid JWT)
  */
 router.get('/me', authenticate, getMe);
+
+/**
+ * @route   POST /api/auth/push-token
+ * @desc    Register or update user's Expo push token.
+ * @access  Private (requires valid JWT)
+ * @body    { token: string | null }
+ */
+router.post('/push-token', authenticate, updatePushToken);
 
 module.exports = router;

@@ -267,4 +267,40 @@ async function getMe(req, res) {
   }
 }
 
-module.exports = { signup, loginTeacherStudent, loginAdmin, getMe };
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/auth/push-token
+// Register or update caller's Expo push token.
+// Protected by JWT middleware in routes.
+// ─────────────────────────────────────────────────────────────────────────────
+async function updatePushToken(req, res) {
+  try {
+    const { token } = req.body;
+
+    if (token !== null && typeof token !== 'string') {
+      return res.status(400).json({ error: 'token must be a string or null.' });
+    }
+
+    const expoToken = token ? token.trim() : null;
+
+    if (
+      expoToken &&
+      !expoToken.startsWith('ExponentPushToken[') &&
+      !expoToken.startsWith('ExpoPushToken[')
+    ) {
+      return res.status(400).json({ error: 'Invalid Expo Push token format.' });
+    }
+
+    await User.findByIdAndUpdate(req.user.id, { expoPushToken: expoToken });
+
+    return res.status(200).json({
+      message: 'Push token updated successfully.',
+      expoPushToken: expoToken,
+    });
+  } catch (err) {
+    console.error('[AUTH] updatePushToken error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+module.exports = { signup, loginTeacherStudent, loginAdmin, getMe, updatePushToken };
+

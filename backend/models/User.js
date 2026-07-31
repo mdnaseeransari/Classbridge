@@ -106,6 +106,13 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    // Expo push token for mobile push notifications
+    expoPushToken: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+
     // Tracks who approved/rejected/locked/unlocked this user and when.
     // Populated by admin action; null until an action is taken.
     actionLog: [

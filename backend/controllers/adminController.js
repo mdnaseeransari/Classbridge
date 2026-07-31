@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const AdminLog = require('../models/AdminLog');
+const { sendExpoPushNotifications } = require('../utils/pushNotifications');
 
 // ─── Helper: build a snapshot of the target user for the audit log ────────────
 function buildSnapshot(user) {
@@ -120,6 +121,26 @@ async function approveUser(req, res) {
 
     await writeLog({ action: 'approved', performedBy: req.user.id, targetUser: user, note: req.body.note });
 
+    // ── Push Notification Trigger for Account Status Change ─────────────
+    (async () => {
+      try {
+        if (user.expoPushToken) {
+          const adminUser = await User.findById(req.user.id).select('name');
+          const adminName = adminUser ? adminUser.name : 'ClassBridge Admin';
+          await sendExpoPushNotifications([
+            {
+              to: user.expoPushToken,
+              title: adminName,
+              body: 'Your account has been approved. You can now access ClassBridge.',
+              data: { type: 'account_approved' },
+            },
+          ]);
+        }
+      } catch (pushErr) {
+        console.error('[ADMIN] approveUser push notification error:', pushErr);
+      }
+    })();
+
     return res.status(200).json({ message: 'User approved successfully.', userId: user._id });
   } catch (err) {
     console.error('[ADMIN] approveUser error:', err);
@@ -149,6 +170,26 @@ async function rejectUser(req, res) {
     await user.save();
 
     await writeLog({ action: 'rejected', performedBy: req.user.id, targetUser: user, note: req.body.note });
+
+    // ── Push Notification Trigger for Account Status Change ─────────────
+    (async () => {
+      try {
+        if (user.expoPushToken) {
+          const adminUser = await User.findById(req.user.id).select('name');
+          const adminName = adminUser ? adminUser.name : 'ClassBridge Admin';
+          await sendExpoPushNotifications([
+            {
+              to: user.expoPushToken,
+              title: adminName,
+              body: 'Your account signup application has been rejected.',
+              data: { type: 'account_rejected' },
+            },
+          ]);
+        }
+      } catch (pushErr) {
+        console.error('[ADMIN] rejectUser push notification error:', pushErr);
+      }
+    })();
 
     return res.status(200).json({ message: 'User rejected successfully.', userId: user._id });
   } catch (err) {
