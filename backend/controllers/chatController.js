@@ -638,6 +638,74 @@ async function sendFileAttachment(req, res) {
   }
 }
 
+/**
+ * POST /api/chat/messages/:id/report
+ * Report a message for review by admins.
+ * Requires caller to be a participant in the message's conversation.
+ * Marks Message.isReported = true (exempts from cron cleanup).
+ */
+async function reportMessage(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id: messageId } = req.params;
+    const { reason, details } = req.body;
+
+    const validReasons = ['inappropriate_content', 'harassment', 'contact_exchange', 'spam', 'other'];
+    if (!reason || !validReasons.includes(reason)) {
+      return res.status(400).json({
+        error: `reason is required and must be one of: ${validReasons.join(', ')}.`,
+      });
+    }
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found.' });
+    }
+
+    const conversation = await Conversation.findById(message.conversation).select('participants');
+    if (!conversation) {
+      return res.status(404).json({ error: 'Associated conversation not found.' });
+    }
+
+    const isParticipant = conversation.participants.some(
+      (p) => p.toString() === callerId
+    );
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'You are not a participant in this conversation.' });
+    }
+
+    // Check if caller already reported this message
+    const MessageReport = require('../models/MessageReport');
+    const existingReport = await MessageReport.findOne({ message: messageId, reporter: callerId });
+    if (existingReport) {
+      return res.status(409).json({ error: 'You have already reported this message.' });
+    }
+
+    const report = await MessageReport.create({
+      message: messageId,
+      conversation: message.conversation,
+      reporter: callerId,
+      reportedUser: message.sender,
+      reason,
+      details: details ? String(details).trim() : null,
+    });
+
+    // Mark message as reported so it is exempt from auto-cleanup cron
+    if (!message.isReported) {
+      message.isReported = true;
+      await message.save();
+    }
+
+    return res.status(201).json({
+      message: 'Report submitted successfully.',
+      report,
+    });
+  } catch (err) {
+    console.error('[CHAT] reportMessage error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 module.exports = {
   getOrCreateDirect,
   listConversations,
@@ -652,4 +720,6 @@ module.exports = {
   createInviteLink,
   joinViaInvite,
   sendFileAttachment,
+  reportMessage,
 };
+

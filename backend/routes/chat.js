@@ -15,6 +15,7 @@ const {
   createInviteLink,
   joinViaInvite,
   sendFileAttachment,
+  reportMessage,
 } = require('../controllers/chatController');
 
 const router = express.Router();
@@ -130,5 +131,14 @@ router.get('/conversations/:id/messages', getMessages);
  * @access  Any approved conversation participant
  */
 router.post('/conversations/:id/attachment', uploadAttachment, sendFileAttachment);
+
+/**
+ * @route   POST /api/chat/messages/:id/report
+ * @desc    Report a message for inappropriate content, harassment, etc.
+ *          Exempts message from auto-cleanup cron (sets isReported = true).
+ * @body    { reason, details? }
+ * @access  Any approved conversation participant
+ */
+router.post('/messages/:id/report', reportMessage);
 
 module.exports = router;

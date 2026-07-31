@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 const AdminLog = require('../models/AdminLog');
 
 // ─── Helper: build a snapshot of the target user for the audit log ────────────
@@ -437,6 +439,368 @@ async function getAdminLogs(req, res) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN READ-ONLY CHAT MONITORING
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/chat/conversations
+ * List ALL 1-to-1 and group conversations across the system for monitoring.
+ * Supports search (by user name or group name) and type filter (direct/group/all).
+ * Admin view: phone numbers visible in participant objects.
+ * Includes isParticipant flag so UI can display "Read-Only Monitoring" badge.
+ * Admin/Super Admin only.
+ */
+async function listAllConversations(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { search, type, page = 1, limit = 20 } = req.query;
+
+    const filter = {};
+
+    if (type && ['direct', 'group'].includes(type)) {
+      filter.type = type;
+    }
+
+    if (search && String(search).trim()) {
+      const searchRegex = new RegExp(String(search).trim(), 'i');
+      // Find matching users by name
+      const matchingUsers = await User.find({ name: searchRegex }).select('_id');
+      const matchingUserIds = matchingUsers.map((u) => u._id);
+
+      filter.$or = [
+        { name: searchRegex },
+        { participants: { $in: matchingUserIds } },
+      ];
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [conversations, total] = await Promise.all([
+      Conversation.find(filter)
+        .sort({ lastActivityAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .populate('participants', 'name role email phone subject classGrade') // admin view: phone visible
+        .populate({ path: 'lastMessage', select: 'content type createdAt sender isDeleted' })
+        .lean(),
+      Conversation.countDocuments(filter),
+    ]);
+
+    // Attach isParticipant flag for UI badge rendering
+    const formatted = conversations.map((conv) => {
+      const isParticipant = conv.participants.some(
+        (p) => p._id.toString() === callerId
+      );
+      return {
+        ...conv,
+        isParticipant,
+      };
+    });
+
+    return res.status(200).json({
+      conversations: formatted,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (err) {
+    console.error('[ADMIN] listAllConversations error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * GET /api/admin/chat/conversations/:id/messages
+ * Read-only message history inspection for ANY conversation in the system.
+ * Does NOT alter readBy array (silent inspection).
+ * Admin/Super Admin only.
+ */
+async function getMonitoredMessages(req, res) {
+  try {
+    const { page = 1 } = req.query;
+    const PAGE_SIZE = 50;
+
+    const conversation = await Conversation.findById(req.params.id).select('name type participants');
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found.' });
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const skip = (pageNum - 1) * PAGE_SIZE;
+
+    const [rawMessages, total] = await Promise.all([
+      Message.find({ conversation: req.params.id })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(PAGE_SIZE)
+        .populate('sender', 'name role email phone subject classGrade') // admin view: phone visible
+        .lean(),
+      Message.countDocuments({ conversation: req.params.id }),
+    ]);
+
+    const messages = rawMessages.reverse();
+
+    const sanitized = messages.map((m) => {
+      if (m.isDeleted) {
+        return { ...m, content: null, fileUrl: null, fileName: null, fileMimeType: null };
+      }
+      return m;
+    });
+
+    const isParticipant = conversation.participants.some(
+      (p) => p.toString() === req.user.id
+    );
+
+    return res.status(200).json({
+      conversation: {
+        _id: conversation._id,
+        name: conversation.name,
+        type: conversation.type,
+        isParticipant,
+      },
+      messages: sanitized,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: PAGE_SIZE,
+        totalPages: Math.ceil(total / PAGE_SIZE),
+        hasOlderMessages: pageNum < Math.ceil(total / PAGE_SIZE),
+      },
+    });
+  } catch (err) {
+    console.error('[ADMIN] getMonitoredMessages error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN REPORT MANAGEMENT QUEUE & ACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MessageReport = require('../models/MessageReport');
+
+/**
+ * GET /api/admin/reports
+ * List report review queue for admins.
+ * Query params: status (pending|resolved|dismissed|all), page, limit.
+ * Default status filter is 'pending'.
+ */
+async function listReports(req, res) {
+  try {
+    const { status = 'pending', page = 1, limit = 20 } = req.query;
+
+    const filter = {};
+    if (status !== 'all') {
+      const validStatuses = ['pending', 'resolved', 'dismissed'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status filter. Must be one of: ${validStatuses.join(', ')} or "all".` });
+      }
+      filter.status = status;
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [reports, total] = await Promise.all([
+      MessageReport.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .populate('reporter', 'name role email phone')
+        .populate('reportedUser', 'name role email phone isBanned')
+        .populate({
+          path: 'message',
+          select: 'content type fileUrl fileName isDeleted createdAt sender',
+        })
+        .populate('conversation', 'name type')
+        .populate('resolvedBy', 'name role email')
+        .lean(),
+      MessageReport.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      reports,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (err) {
+    console.error('[ADMIN] listReports error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * GET /api/admin/reports/:id
+ * Get single report detail with chat context (5 messages before and 5 messages after).
+ */
+async function getReportDetail(req, res) {
+  try {
+    const report = await MessageReport.findById(req.params.id)
+      .populate('reporter', 'name role email phone')
+      .populate('reportedUser', 'name role email phone isBanned status')
+      .populate({
+        path: 'message',
+        select: 'content type fileUrl fileName isDeleted createdAt sender conversation',
+      })
+      .populate('conversation', 'name type participants')
+      .populate('resolvedBy', 'name role email')
+      .lean();
+
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found.' });
+    }
+
+    // Fetch context messages (5 before, 5 after reported message timestamp)
+    let contextMessages = [];
+    if (report.message && report.message.createdAt) {
+      const targetTime = report.message.createdAt;
+      const conversationId = report.conversation._id || report.message.conversation;
+
+      const [before, after] = await Promise.all([
+        Message.find({
+          conversation: conversationId,
+          createdAt: { $lt: targetTime },
+        })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .populate('sender', 'name role email phone')
+          .lean(),
+        Message.find({
+          conversation: conversationId,
+          createdAt: { $gt: targetTime },
+        })
+          .sort({ createdAt: 1 })
+          .limit(5)
+          .populate('sender', 'name role email phone')
+          .lean(),
+      ]);
+
+      // Combine in chronological order: before (reversed), target message, after
+      contextMessages = [
+        ...before.reverse(),
+        report.message,
+        ...after,
+      ];
+    }
+
+    return res.status(200).json({
+      report,
+      contextMessages,
+    });
+  } catch (err) {
+    console.error('[ADMIN] getReportDetail error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+/**
+ * PATCH /api/admin/reports/:id/action
+ * Perform a resolution action on a pending report.
+ * Body: { action: 'dismiss' | 'delete_message' | 'ban_user' | 'resolve', adminNotes? }
+ */
+async function actionReport(req, res) {
+  try {
+    const { action, adminNotes } = req.body;
+    const validActions = ['dismiss', 'delete_message', 'ban_user', 'resolve'];
+
+    if (!action || !validActions.includes(action)) {
+      return res.status(400).json({
+        error: `action is required and must be one of: ${validActions.join(', ')}.`,
+      });
+    }
+
+    const report = await MessageReport.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found.' });
+    }
+
+    if (report.status !== 'pending') {
+      return res.status(400).json({ error: `Report is already ${report.status}.` });
+    }
+
+    const adminId = req.user.id;
+    let logNote = adminNotes ? String(adminNotes).trim() : null;
+
+    if (action === 'dismiss') {
+      report.status = 'dismissed';
+    } else if (action === 'delete_message') {
+      report.status = 'resolved';
+      const msg = await Message.findById(report.message);
+      if (msg && !msg.isDeleted) {
+        msg.isDeleted = true;
+        msg.deletedAt = new Date();
+        await msg.save();
+      }
+      // Audit log
+      const reportedUserObj = await User.findById(report.reportedUser);
+      if (reportedUserObj) {
+        await writeLog({
+          action: 'message_deleted_via_report',
+          performedBy: adminId,
+          targetUser: reportedUserObj,
+          note: `Deleted message ${report.message} due to report. ${logNote || ''}`.trim(),
+        });
+      }
+    } else if (action === 'ban_user') {
+      report.status = 'resolved';
+      const targetUser = await User.findById(report.reportedUser);
+      if (targetUser && !targetUser.isBanned) {
+        if (targetUser.role === 'superadmin') {
+          return res.status(403).json({ error: 'Super Admin accounts cannot be banned.' });
+        }
+        if (req.user.role === 'admin' && targetUser.role === 'admin') {
+          return res.status(403).json({ error: 'Admins cannot ban other Admin accounts.' });
+        }
+        targetUser.isBanned = true;
+        targetUser.actionLog.push({ action: 'banned', performedBy: adminId });
+        await targetUser.save();
+
+        await writeLog({
+          action: 'banned',
+          performedBy: adminId,
+          targetUser,
+          note: `Banned via report action. ${logNote || ''}`.trim(),
+        });
+      }
+    } else if (action === 'resolve') {
+      report.status = 'resolved';
+      const reportedUserObj = await User.findById(report.reportedUser);
+      if (reportedUserObj) {
+        await writeLog({
+          action: 'report_resolved',
+          performedBy: adminId,
+          targetUser: reportedUserObj,
+          note: `Resolved report. ${logNote || ''}`.trim(),
+        });
+      }
+    }
+
+    report.resolvedBy = adminId;
+    report.resolvedAt = new Date();
+    report.adminNotes = logNote;
+    await report.save();
+
+    return res.status(200).json({
+      message: `Report successfully ${report.status} with action: ${action}.`,
+      report,
+    });
+  } catch (err) {
+    console.error('[ADMIN] actionReport error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -449,4 +813,10 @@ module.exports = {
   createAdmin,
   promoteToAdmin,
   getAdminLogs,
+  listAllConversations,
+  getMonitoredMessages,
+  listReports,
+  getReportDetail,
+  actionReport,
 };
+

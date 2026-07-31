@@ -12,6 +12,11 @@ const {
   createAdmin,
   promoteToAdmin,
   getAdminLogs,
+  listAllConversations,
+  getMonitoredMessages,
+  listReports,
+  getReportDetail,
+  actionReport,
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -116,5 +121,48 @@ router.patch('/users/:id/promote', requireRole('superadmin'), promoteToAdmin);
  * @access  admin | superadmin
  */
 router.get('/logs', getAdminLogs);
+
+// ─── Chat Read-Only Monitoring ────────────────────────────────────────────────
+
+/**
+ * @route   GET /api/admin/chat/conversations
+ * @desc    List all 1-to-1 and group conversations for read-only inspection.
+ *          Query params: search, type (direct|group|all), page, limit.
+ *          Includes isParticipant boolean flag.
+ * @access  admin | superadmin
+ */
+router.get('/chat/conversations', listAllConversations);
+
+/**
+ * @route   GET /api/admin/chat/conversations/:id/messages
+ * @desc    Read-only message history inspection for ANY conversation in the system.
+ *          Does not update read receipts.
+ * @access  admin | superadmin
+ */
+router.get('/chat/conversations/:id/messages', getMonitoredMessages);
+
+// ─── Message Report Review Queue & Actions ─────────────────────────────────────
+
+/**
+ * @route   GET /api/admin/reports
+ * @desc    List report review queue. Query params: status (pending|resolved|dismissed|all), page, limit.
+ * @access  admin | superadmin
+ */
+router.get('/reports', listReports);
+
+/**
+ * @route   GET /api/admin/reports/:id
+ * @desc    Get single report detail with chat context (5 messages before, 5 messages after).
+ * @access  admin | superadmin
+ */
+router.get('/reports/:id', getReportDetail);
+
+/**
+ * @route   PATCH /api/admin/reports/:id/action
+ * @desc    Take action on a report: dismiss, delete_message, ban_user, or resolve.
+ * @body    { action: 'dismiss' | 'delete_message' | 'ban_user' | 'resolve', adminNotes? }
+ * @access  admin | superadmin
+ */
+router.patch('/reports/:id/action', actionReport);
 
 module.exports = router;
