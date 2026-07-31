@@ -39,7 +39,7 @@ export default function PromoteToAdminScreen({ route, navigation }) {
         note: note.trim() || undefined,
       });
       Alert.alert('Success', `User ${user.name} promoted to Admin successfully.`);
-      navigation.navigate('AdminDashboard');
+      navigation.navigate('AdminTabs');
     } catch (err) {
       setError(err?.response?.data?.error || 'Failed to promote user to admin.');
     } finally {

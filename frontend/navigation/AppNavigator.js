@@ -58,6 +58,7 @@ function UserStackNavigator() {
       <UserStack.Screen name="UserTabs" component={UserTabNavigator} />
       <UserStack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <UserStack.Screen name="NewChatSelection" component={NewChatSelectionScreen} />
+      <UserStack.Screen name="CreateGroup" component={CreateGroupScreen} />
       <UserStack.Screen name="GroupSettings" component={GroupSettingsScreen} />
       <UserStack.Screen name="GroupMemberList" component={GroupMemberListScreen} />
       <UserStack.Screen name="JoinGroup" component={JoinGroupScreen} />
@@ -82,6 +83,22 @@ function UserTabNavigator() {
 }
 
 // Admin Navigation (Admin / Super Admin)
+function AdminTabNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { backgroundColor: '#1e293b', borderTopColor: '#334155' },
+        tabBarActiveTintColor: '#38bdf8',
+        tabBarInactiveTintColor: '#64748b',
+      }}
+    >
+      <Tab.Screen name="AdminDashboard" component={AdminDashboardScreen} options={{ tabBarLabel: 'Dashboard' }} />
+      <Tab.Screen name="Chat" component={ChatInboxScreen} options={{ tabBarLabel: 'Chat' }} />
+    </Tab.Navigator>
+  );
+}
+
 function AdminStackNavigator() {
   return (
     <Stack.Navigator
@@ -90,7 +107,7 @@ function AdminStackNavigator() {
         contentStyle: { backgroundColor: '#0f172a' },
       }}
     >
-      <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+      <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
       <Stack.Screen name="UserList" component={UserListScreen} />
       <Stack.Screen name="PendingApprovals" component={PendingApprovalsScreen} />
       <Stack.Screen name="UserDetail" component={UserDetailScreen} />

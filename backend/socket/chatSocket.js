@@ -11,7 +11,8 @@ const MEMBER_ROLES = ['teacher', 'student'];
 function isAdmin(role) { return ADMIN_ROLES.includes(role); }
 function isMember(role) { return MEMBER_ROLES.includes(role); }
 function canDirectChat(roleA, roleB) {
-  return (isAdmin(roleA) && isMember(roleB)) || (isMember(roleA) && isAdmin(roleB));
+  // Block only when both sides are members (teacher or student)
+  return !(isMember(roleA) && isMember(roleB));
 }
 
 /**

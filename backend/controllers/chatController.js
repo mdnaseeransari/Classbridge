@@ -14,11 +14,14 @@ function isAdmin(role) { return ADMIN_ROLES.includes(role); }
 function isMember(role) { return MEMBER_ROLES.includes(role); }
 
 /**
- * Returns true only if one party is an admin/superadmin and the other is a
- * teacher/student. Blocks teacher↔student and admin↔admin.
+ * Returns true unless BOTH parties are non-admin members (teacher/student).
+ * Allowed: admin↔teacher, admin↔student, admin↔admin, admin↔superadmin,
+ *          superadmin↔superadmin.
+ * Blocked: teacher↔student, teacher↔teacher, student↔student.
  */
 function canDirectChat(roleA, roleB) {
-  return (isAdmin(roleA) && isMember(roleB)) || (isMember(roleA) && isAdmin(roleB));
+  // Block only when both sides are members (teacher or student)
+  return !(isMember(roleA) && isMember(roleB));
 }
 
 /**
@@ -57,13 +60,14 @@ async function getOrCreateDirect(req, res) {
       return res.status(403).json({ error: 'Cannot start a conversation with this user.' });
     }
 
-    // ── Enforce the Teacher↔Student block at the API level ────────────────────
+    // ── Enforce the member↔member block at the API level ─────────────────────
+    // Teachers and Students cannot DM each other (or other teachers/students).
+    // Admins and Super Admins may DM anyone, including each other.
     if (!canDirectChat(callerRole, recipient.role)) {
       return res.status(403).json({
         error:
-          'Direct 1-to-1 chat is only permitted between an Admin/Super Admin and a ' +
-          'Teacher or Student. Teacher-to-Student and Admin-to-Admin direct chat ' +
-          'is not allowed.',
+          'Direct 1-to-1 chat is not permitted between Teachers and Students. ' +
+          'Both Teachers and Students may only send direct messages to an Admin or Super Admin.',
       });
     }
 
