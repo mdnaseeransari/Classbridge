@@ -16,6 +16,7 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const chatRoutes = require('./routes/chat');
 const { initChatSocket } = require('./socket/chatSocket');
+const { initCleanupCron } = require('./jobs/cleanupCron');
 
 // Verify environment variables are present (log presence, not actual values)
 const requiredEnvVars = [
@@ -68,6 +69,8 @@ mongoose.connect(MONGODB_URI)
     console.log('Successfully connected to MongoDB.');
     // Seed Super Admin on first start (idempotent — skips if already exists)
     await seedSuperAdmin();
+    // Initialize scheduled storage cleanup cron job (runs daily at 2:00 AM)
+    initCleanupCron();
   })
   .catch(err => console.error('MongoDB connection error:', err));
 
