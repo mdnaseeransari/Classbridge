@@ -47,6 +47,10 @@ const UserStack = createNativeStackNavigator();
 import ChatInboxScreen from '../screens/chat/ChatInboxScreen';
 import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
 import NewChatSelectionScreen from '../screens/chat/NewChatSelectionScreen';
+import CreateGroupScreen from '../screens/chat/CreateGroupScreen';
+import GroupSettingsScreen from '../screens/chat/GroupSettingsScreen';
+import GroupMemberListScreen from '../screens/chat/GroupMemberListScreen';
+import JoinGroupScreen from '../screens/chat/JoinGroupScreen';
 
 function UserStackNavigator() {
   return (
@@ -54,6 +58,9 @@ function UserStackNavigator() {
       <UserStack.Screen name="UserTabs" component={UserTabNavigator} />
       <UserStack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <UserStack.Screen name="NewChatSelection" component={NewChatSelectionScreen} />
+      <UserStack.Screen name="GroupSettings" component={GroupSettingsScreen} />
+      <UserStack.Screen name="GroupMemberList" component={GroupMemberListScreen} />
+      <UserStack.Screen name="JoinGroup" component={JoinGroupScreen} />
     </UserStack.Navigator>
   );
 }
@@ -92,6 +99,10 @@ function AdminStackNavigator() {
       <Stack.Screen name="PromoteToAdmin" component={PromoteToAdminScreen} />
       <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <Stack.Screen name="NewChatSelection" component={NewChatSelectionScreen} />
+      <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+      <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
+      <Stack.Screen name="GroupMemberList" component={GroupMemberListScreen} />
+      <Stack.Screen name="JoinGroup" component={JoinGroupScreen} />
     </Stack.Navigator>
   );
 }

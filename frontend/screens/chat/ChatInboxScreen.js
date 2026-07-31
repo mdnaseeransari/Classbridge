@@ -110,6 +110,14 @@ export default function ChatInboxScreen({ navigation }) {
     navigation.navigate('NewChatSelection');
   };
 
+  const handleCreateGroup = () => {
+    navigation.navigate('CreateGroup');
+  };
+
+  const handleJoinGroup = () => {
+    navigation.navigate('JoinGroup');
+  };
+
   const renderItem = ({ item }) => {
     // Determine title, avatar and online status
     let title = item.name || 'Group Chat';
@@ -166,15 +174,31 @@ export default function ChatInboxScreen({ navigation }) {
     );
   };
 
+  const isAdmin = ['admin', 'superadmin'].includes(user?.role);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity style={styles.newChatBtn} onPress={handleCreateChat}>
-          <Text style={styles.newChatBtnText}>＋ New</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={[styles.newChatBtn, { backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155' }]} onPress={handleJoinGroup}>
+            <Text style={[styles.newChatBtnText, { color: '#38bdf8' }]}>Join Group</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.newChatBtn} onPress={handleCreateChat}>
+            <Text style={styles.newChatBtnText}>＋ New</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {isAdmin && (
+        <View style={styles.adminBar}>
+          <Text style={styles.adminBarText}>Group Administration:</Text>
+          <TouchableOpacity style={styles.adminBarBtn} onPress={handleCreateGroup}>
+            <Text style={styles.adminBarBtnText}>＋ Create Group Chat</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}>
@@ -246,4 +270,17 @@ const styles = StyleSheet.create({
   preview: { fontSize: 13, color: '#94a3b8', flex: 1, marginRight: 8 },
   badge: { backgroundColor: '#38bdf8', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
   badgeText: { color: '#0f172a', fontSize: 11, fontWeight: '800' },
+  adminBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  adminBarText: { color: '#64748b', fontSize: 12, fontWeight: '600' },
+  adminBarBtn: { backgroundColor: '#8b5cf622', borderWidth: 1, borderColor: '#8b5cf6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  adminBarBtnText: { color: '#c084fc', fontSize: 12, fontWeight: '700' },
 });

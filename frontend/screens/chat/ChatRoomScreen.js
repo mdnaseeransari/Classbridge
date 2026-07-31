@@ -22,6 +22,7 @@ export default function ChatRoomScreen({ route, navigation }) {
   const { conversationId, title } = route.params;
   const { user } = useContext(AuthContext);
 
+  const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -34,19 +35,27 @@ export default function ChatRoomScreen({ route, navigation }) {
   const typingTimeoutRef = useRef(null);
   const socketRef = useRef(null);
 
+  const isGroup = conversation?.type === 'group';
+  const isAdminUser = ['admin', 'superadmin'].includes(user?.role);
+
   useEffect(() => {
     socketRef.current = getSocket();
 
-    // Fetch initial page of messages (REST API returns oldest-first, so we invert or display appropriately)
+    const fetchConvoDetails = async () => {
+      try {
+        const res = await api.get(`/chat/conversations/${conversationId}`);
+        setConversation(res.data.conversation);
+      } catch (err) {
+        console.error('[CHAT_ROOM] Error loading conversation details:', err);
+      }
+    };
+
     const fetchMessages = async () => {
       try {
         const res = await api.get(`/chat/conversations/${conversationId}/messages`, { params: { page: 1 } });
-        // The messages are received oldest-first from backend.
-        // We will store them in messages state. We invert FlatList so index 0 is the newest message (bottom).
-        // So we reverse the API output array to have the newest messages at index 0.
         const fetched = res.data.messages || [];
         setMessages([...fetched].reverse());
-        setHasMore(fetched.length === 50); // limit per page is 50
+        setHasMore(fetched.length === 50);
       } catch (err) {
         console.error('[CHAT_ROOM] Error loading messages:', err);
       } finally {
@@ -54,27 +63,20 @@ export default function ChatRoomScreen({ route, navigation }) {
       }
     };
 
+    fetchConvoDetails();
     fetchMessages();
 
-    // Socket Room Listeners
     if (socketRef.current) {
-      // Join conversation room
       socketRef.current.emit('join_conversation', { conversationId });
-
-      // Mark messages read on entry
       socketRef.current.emit('mark_read', { conversationId });
 
-      // Receive real-time message
       socketRef.current.on('message_received', (newMsg) => {
         if (newMsg.conversation === conversationId) {
           setMessages((prev) => [newMsg, ...prev]);
-
-          // Emit mark_read for newly received message if user is active in the room
           socketRef.current.emit('mark_read', { conversationId });
         }
       });
 
-      // Typing status relay
       socketRef.current.on('typing', ({ conversationId: cId, userId, isTyping: typingStatus }) => {
         if (cId === conversationId && userId !== user?._id) {
           setIsTyping(typingStatus);
@@ -139,7 +141,6 @@ export default function ChatRoomScreen({ route, navigation }) {
   const handleTextChange = (text) => {
     setInputText(text);
 
-    // Typing debouncer
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     } else {
@@ -182,6 +183,16 @@ export default function ChatRoomScreen({ route, navigation }) {
     );
   };
 
+  const handleHeaderPress = () => {
+    if (isGroup) {
+      if (isAdminUser) {
+        navigation.navigate('GroupSettings', { conversationId });
+      } else {
+        navigation.navigate('GroupMemberList', { conversationId, groupName: title });
+      }
+    }
+  };
+
   const renderBubble = ({ item }) => {
     const isSelf = item.sender?._id === user?._id;
     const formattedTime = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -192,7 +203,7 @@ export default function ChatRoomScreen({ route, navigation }) {
         onLongPress={() => !isSelf && reportMessage(item._id)}
         style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft]}
       >
-        {!isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
+        {isGroup && !isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
         <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther]}>
           <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther]}>{item.content}</Text>
           <Text style={[styles.bubbleTime, isSelf ? styles.timeSelf : styles.timeOther]}>{formattedTime}</Text>
@@ -212,7 +223,10 @@ export default function ChatRoomScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
+        <TouchableOpacity onPress={handleHeaderPress} style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
+          {isGroup && <Text style={styles.headerSub}>Tap for Info ℹ</Text>}
+        </TouchableOpacity>
         <View style={{ width: 40 }} />
       </View>
 
@@ -313,4 +327,5 @@ const styles = StyleSheet.create({
   emojiPicker: { backgroundColor: '#1e293b', borderTopWidth: 1, borderTopColor: '#334155', padding: 8 },
   emojiCell: { flex: 1, alignItems: 'center', paddingVertical: 10 },
   emojiText: { fontSize: 24 },
+  headerSub: { fontSize: 10, color: '#94a3b8', marginTop: 2, fontWeight: '600' },
 });
