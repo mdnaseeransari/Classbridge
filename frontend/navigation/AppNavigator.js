@@ -16,6 +16,12 @@ import HomeScreen from '../screens/main/HomeScreen';
 
 // Admin Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
+import UserListScreen from '../screens/admin/UserListScreen';
+import PendingApprovalsScreen from '../screens/admin/PendingApprovalsScreen';
+import UserDetailScreen from '../screens/admin/UserDetailScreen';
+import AdminLogsScreen from '../screens/admin/AdminLogsScreen';
+import CreateAdminScreen from '../screens/admin/CreateAdminScreen';
+import PromoteToAdminScreen from '../screens/admin/PromoteToAdminScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -62,6 +68,12 @@ function AdminStackNavigator() {
       }}
     >
       <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+      <Stack.Screen name="UserList" component={UserListScreen} />
+      <Stack.Screen name="PendingApprovals" component={PendingApprovalsScreen} />
+      <Stack.Screen name="UserDetail" component={UserDetailScreen} />
+      <Stack.Screen name="AdminLogs" component={AdminLogsScreen} />
+      <Stack.Screen name="CreateAdmin" component={CreateAdminScreen} />
+      <Stack.Screen name="PromoteToAdmin" component={PromoteToAdminScreen} />
     </Stack.Navigator>
   );
 }
