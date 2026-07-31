@@ -43,6 +43,21 @@ function AuthStack() {
 }
 
 // Approved User Navigation (Teacher / Student)
+const UserStack = createNativeStackNavigator();
+import ChatInboxScreen from '../screens/chat/ChatInboxScreen';
+import ChatRoomScreen from '../screens/chat/ChatRoomScreen';
+import NewChatSelectionScreen from '../screens/chat/NewChatSelectionScreen';
+
+function UserStackNavigator() {
+  return (
+    <UserStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0f172a' } }}>
+      <UserStack.Screen name="UserTabs" component={UserTabNavigator} />
+      <UserStack.Screen name="ChatRoom" component={ChatRoomScreen} />
+      <UserStack.Screen name="NewChatSelection" component={NewChatSelectionScreen} />
+    </UserStack.Navigator>
+  );
+}
+
 function UserTabNavigator() {
   return (
     <Tab.Navigator
@@ -54,6 +69,7 @@ function UserTabNavigator() {
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Chat" component={ChatInboxScreen} />
     </Tab.Navigator>
   );
 }
@@ -74,6 +90,8 @@ function AdminStackNavigator() {
       <Stack.Screen name="AdminLogs" component={AdminLogsScreen} />
       <Stack.Screen name="CreateAdmin" component={CreateAdminScreen} />
       <Stack.Screen name="PromoteToAdmin" component={PromoteToAdminScreen} />
+      <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
+      <Stack.Screen name="NewChatSelection" component={NewChatSelectionScreen} />
     </Stack.Navigator>
   );
 }
@@ -108,8 +126,8 @@ export default function AppNavigator() {
     return <AdminStackNavigator />;
   }
 
-  // 4. Approved Teacher / Student -> Show User Tabs
-  return <UserTabNavigator />;
+  // 4. Approved Teacher / Student -> Show User Navigation Stack
+  return <UserStackNavigator />;
 }
 
 const styles = StyleSheet.create({
