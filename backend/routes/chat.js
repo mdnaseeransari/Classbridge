@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
+const { uploadAttachment } = require('../middleware/upload');
 const {
   getOrCreateDirect,
   listConversations,
@@ -13,6 +14,7 @@ const {
   getGroupMembers,
   createInviteLink,
   joinViaInvite,
+  sendFileAttachment,
 } = require('../controllers/chatController');
 
 const router = express.Router();
@@ -109,7 +111,7 @@ router.post('/groups/:id/invites', createInviteLink);
  */
 router.post('/groups/join/:code', joinViaInvite);
 
-// ─── Messages ─────────────────────────────────────────────────────────────────
+// ─── Messages & Attachments ───────────────────────────────────────────────────
 
 /**
  * @route   GET /api/chat/conversations/:id/messages
@@ -120,5 +122,13 @@ router.post('/groups/join/:code', joinViaInvite);
  * @access  Any approved user (participant only)
  */
 router.get('/conversations/:id/messages', getMessages);
+
+/**
+ * @route   POST /api/chat/conversations/:id/attachment
+ * @desc    Upload an attachment (image, PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX up to 10 MB).
+ *          Streams file to Cloudinary and saves URL in MongoDB.
+ * @access  Any approved conversation participant
+ */
+router.post('/conversations/:id/attachment', uploadAttachment, sendFileAttachment);
 
 module.exports = router;

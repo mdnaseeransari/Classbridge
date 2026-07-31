@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const GroupInvite = require('../models/GroupInvite');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -568,6 +569,75 @@ async function joinViaInvite(req, res) {
   }
 }
 
+/**
+ * POST /api/chat/conversations/:id/attachment
+ * Upload a file attachment (image, PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX up to 10 MB)
+ * to Cloudinary and store as a file message.
+ */
+async function sendFileAttachment(req, res) {
+  try {
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+    const conversationId = req.params.id;
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided.' });
+    }
+
+    const conversation = await Conversation.findById(conversationId).select('participants type');
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found.' });
+    }
+
+    const isParticipant = conversation.participants.some(
+      (p) => p.toString() === callerId
+    );
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'You are not a participant in this conversation.' });
+    }
+
+    // For direct conversations: re-validate DM role rules
+    if (conversation.type === 'direct') {
+      const otherParticipantId = conversation.participants.find(
+        (p) => p.toString() !== callerId
+      );
+      const otherUser = await User.findById(otherParticipantId).select('role status isBanned');
+      if (!otherUser || !canDirectChat(callerRole, otherUser.role)) {
+        return res.status(403).json({ error: 'Direct chat is not permitted between these roles.' });
+      }
+    }
+
+    // Upload memory buffer to Cloudinary
+    const cloudinaryResult = await uploadToCloudinary(req.file.buffer, req.file.originalname);
+
+    const caption = req.body.caption ? String(req.body.caption).trim() : null;
+
+    const message = await Message.create({
+      conversation: conversationId,
+      sender: callerId,
+      content: caption || req.file.originalname,
+      type: 'file',
+      fileUrl: cloudinaryResult.secure_url,
+      fileName: req.file.originalname,
+      fileMimeType: req.file.mimetype,
+      fileSizeBytes: req.file.size,
+    });
+
+    // Update conversation last activity
+    await Conversation.findByIdAndUpdate(conversationId, {
+      lastMessage: message._id,
+      lastActivityAt: message.createdAt,
+    });
+
+    await message.populate('sender', senderProjection(callerRole));
+
+    return res.status(201).json({ message });
+  } catch (err) {
+    console.error('[CHAT] sendFileAttachment error:', err);
+    return res.status(500).json({ error: 'Failed to upload attachment.' });
+  }
+}
+
 module.exports = {
   getOrCreateDirect,
   listConversations,
@@ -581,4 +651,5 @@ module.exports = {
   getGroupMembers,
   createInviteLink,
   joinViaInvite,
+  sendFileAttachment,
 };
