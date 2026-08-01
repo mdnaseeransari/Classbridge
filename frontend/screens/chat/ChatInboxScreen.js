@@ -106,16 +106,18 @@ export default function ChatInboxScreen({ navigation }) {
   };
 
   const handleCreateChat = () => {
-    // Navigate to select recipient
-    navigation.navigate('NewChatSelection');
+    // Navigate to select recipient.
+    // getParent() is needed when this screen is mounted inside a Tab (AdminTabNavigator);
+    // the Tab's navigation prop does not reach stack screens in the parent navigator.
+    (navigation.getParent() ?? navigation).navigate('NewChatSelection');
   };
 
   const handleCreateGroup = () => {
-    navigation.navigate('CreateGroup');
+    (navigation.getParent() ?? navigation).navigate('CreateGroup');
   };
 
   const handleJoinGroup = () => {
-    navigation.navigate('JoinGroup');
+    (navigation.getParent() ?? navigation).navigate('JoinGroup');
   };
 
   const renderItem = ({ item }) => {
@@ -141,7 +143,10 @@ export default function ChatInboxScreen({ navigation }) {
       <TouchableOpacity
         style={styles.item}
         activeOpacity={0.75}
-        onPress={() => navigation.navigate('ChatRoom', { conversationId: item._id, title })}
+        onPress={() => {
+          // Same parent-escape pattern: ChatRoom is a stack screen, not a tab screen.
+          (navigation.getParent() ?? navigation).navigate('ChatRoom', { conversationId: item._id, title });
+        }}
       >
         <View style={styles.avatarContainer}>
           <View style={[styles.avatar, { backgroundColor: item.type === 'direct' ? '#38bdf822' : '#8b5cf622' }]}>

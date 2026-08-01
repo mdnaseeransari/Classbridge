@@ -4,6 +4,18 @@ import api from '../services/api';
 
 export const AuthContext = createContext();
 
+// ── normalizeUser ─────────────────────────────────────────────────────────────
+// The backend has two shapes for the user object:
+//   • safeUserResponse() (login) → { id, name, role, ... }   (no _id)
+//   • getMe() (checkAuth)        → { _id, name, role, ... }  (no id)
+// All frontend code compares against user?._id.  This helper ensures _id is
+// always present regardless of which path populated the state.
+function normalizeUser(u) {
+  if (!u) return null;
+  const _id = u._id ?? u.id;      // prefer _id, fall back to id
+  return { ...u, _id: String(_id), id: String(_id) };
+}
+
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
@@ -20,7 +32,7 @@ export const AuthProvider = ({ children }) => {
         const res = await api.get('/auth/me', {
           headers: { Authorization: `Bearer ${storedToken}` },
         });
-        setUser(res.data.user);
+        setUser(normalizeUser(res.data.user));
       } else {
         setToken(null);
         setUser(null);
@@ -47,8 +59,8 @@ export const AuthProvider = ({ children }) => {
       const { token: newToken, user: userData } = res.data;
       await storage.setItem('userToken', newToken);
       setToken(newToken);
-      setUser(userData);
-      return { success: true, user: userData };
+      setUser(normalizeUser(userData));
+      return { success: true, user: normalizeUser(userData) };
     } catch (err) {
       const errorMessage = err?.response?.data?.error || 'Login failed. Please check your network connection.';
       return { success: false, error: errorMessage };
@@ -62,8 +74,8 @@ export const AuthProvider = ({ children }) => {
       const { token: newToken, user: userData } = res.data;
       await storage.setItem('userToken', newToken);
       setToken(newToken);
-      setUser(userData);
-      return { success: true, user: userData };
+      setUser(normalizeUser(userData));
+      return { success: true, user: normalizeUser(userData) };
     } catch (err) {
       const errorMessage = err?.response?.data?.error || 'Admin login failed. Please try again.';
       return { success: false, error: errorMessage };
