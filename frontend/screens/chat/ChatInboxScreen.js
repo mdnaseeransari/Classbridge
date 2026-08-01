@@ -55,28 +55,69 @@ export default function ChatInboxScreen({ navigation }) {
   useEffect(() => {
     let socketInstance = getSocket();
 
+    // ── Named handlers so we can remove exactly these listeners later ────────
+    // Using .off(eventName) without a fn reference removes ALL listeners for
+    // that event, which would clobber ChatRoomScreen's own message_received
+    // handler if both screens are in the stack simultaneously.
+
+    const onMessageReceived = (msg) => {
+      // Update the matching conversation in-place — no HTTP round-trip needed.
+      // msg fields: { _id, conversation (id string), content, type, createdAt, sender }
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c._id === msg.conversation);
+        if (idx === -1) return prev; // message for a conversation not yet loaded
+
+        const updated = {
+          ...prev[idx],
+          lastMessage: {
+            // preserve any existing fields (type, fileUrl, etc.) then patch
+            ...(prev[idx].lastMessage || {}),
+            content: msg.content,
+            type: msg.type,
+            createdAt: msg.createdAt,
+            sender: msg.sender,
+          },
+          lastActivityAt: msg.createdAt,
+          // Increment unread count if this is not our own message
+          unreadCount:
+            msg.sender?._id !== user?._id
+              ? (prev[idx].unreadCount || 0) + 1
+              : prev[idx].unreadCount || 0,
+        };
+
+        // Remove the updated conversation and move it to the front (most recent)
+        const next = prev.filter((_, i) => i !== idx);
+        return [updated, ...next];
+      });
+    };
+
+    const onMessagesRead = ({ conversationId }) => {
+      // Clear unread count for the conversation that was read
+      setConversations((prev) =>
+        prev.map((c) =>
+          c._id === conversationId ? { ...c, unreadCount: 0 } : c
+        )
+      );
+    };
+
+    const onUserOnline = ({ userId }) => {
+      setOnlineUsers((prev) => ({ ...prev, [userId]: true }));
+    };
+
+    const onUserOffline = ({ userId }) => {
+      setOnlineUsers((prev) => ({ ...prev, [userId]: false }));
+    };
+
     const setupSocket = async () => {
       if (!socketInstance) {
         socketInstance = await connectSocket();
       }
 
       if (socketInstance) {
-        socketInstance.on('message_received', (msg) => {
-          // Re-fetch conversation list to get latest message preview & update position
-          fetchConversations();
-        });
-
-        socketInstance.on('messages_read', ({ conversationId }) => {
-          fetchConversations();
-        });
-
-        socketInstance.on('user_online', ({ userId }) => {
-          setOnlineUsers((prev) => ({ ...prev, [userId]: true }));
-        });
-
-        socketInstance.on('user_offline', ({ userId }) => {
-          setOnlineUsers((prev) => ({ ...prev, [userId]: false }));
-        });
+        socketInstance.on('message_received', onMessageReceived);
+        socketInstance.on('messages_read', onMessagesRead);
+        socketInstance.on('user_online', onUserOnline);
+        socketInstance.on('user_offline', onUserOffline);
       }
     };
 
@@ -84,13 +125,14 @@ export default function ChatInboxScreen({ navigation }) {
 
     return () => {
       if (socketInstance) {
-        socketInstance.off('message_received');
-        socketInstance.off('messages_read');
-        socketInstance.off('user_online');
-        socketInstance.off('user_offline');
+        // Remove only THIS screen's handlers, not all listeners for these events
+        socketInstance.off('message_received', onMessageReceived);
+        socketInstance.off('messages_read', onMessagesRead);
+        socketInstance.off('user_online', onUserOnline);
+        socketInstance.off('user_offline', onUserOffline);
       }
     };
-  }, []);
+  }, [user?._id]); // re-run if user changes (e.g. after login/logout cycle)
 
   useFocusEffect(
     useCallback(() => {
