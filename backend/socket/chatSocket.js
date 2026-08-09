@@ -154,7 +154,7 @@ function initChatSocket(io) {
     // Payload: { conversationId, content }
     // Emits:   'message_received' → to the conversation room
     // ────────────────────────────────────────────────────────────────────────
-    socket.on('send_message', async ({ conversationId, content }, ack) => {
+    socket.on('send_message', async ({ conversationId, content, replyTo }, ack) => {
       try {
         if (!conversationId || !content || !String(content).trim()) {
           return emitError(socket, 'conversationId and content are required.');
@@ -197,6 +197,7 @@ function initChatSocket(io) {
           sender: userId,
           content: trimmedContent,
           type: 'text',
+          replyTo: replyTo || null,
         });
 
         // Update conversation's last activity
@@ -204,6 +205,35 @@ function initChatSocket(io) {
           lastMessage: message._id,
           lastActivityAt: message.createdAt,
         });
+
+        // Build replyTo payload if message has quoted message
+        let replyToPayload = null;
+        if (message.replyTo) {
+          await message.populate({
+            path: 'replyTo',
+            select: '_id content sender type fileName fileUrl',
+            populate: {
+              path: 'sender',
+              select: 'name role subject classGrade',
+            },
+          });
+          if (message.replyTo) {
+            replyToPayload = {
+              _id: message.replyTo._id,
+              content: message.replyTo.content,
+              type: message.replyTo.type,
+              fileName: message.replyTo.fileName,
+              fileUrl: message.replyTo.fileUrl,
+              sender: message.replyTo.sender
+                ? {
+                    _id: message.replyTo.sender._id,
+                    name: message.replyTo.sender.name,
+                    role: message.replyTo.sender.role,
+                  }
+                : null,
+            };
+          }
+        }
 
         // Build the payload to emit. We need to respect phone privacy for each
         // recipient. Since all socket room members share the same event, we
@@ -216,6 +246,7 @@ function initChatSocket(io) {
           content: message.content,
           type: message.type,
           createdAt: message.createdAt,
+          replyTo: replyToPayload,
           readBy: [],
           sender: {
             _id: socket.userData._id,

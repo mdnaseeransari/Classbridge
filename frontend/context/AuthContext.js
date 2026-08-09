@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import storage from '../services/storage';
 import api from '../services/api';
+import * as Notifications from 'expo-notifications';
 
 export const AuthContext = createContext();
 
@@ -21,6 +22,34 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const registerPushToken = async () => {
+    try {
+      if (!Notifications || typeof Notifications.getPermissionsAsync !== 'function') {
+        return;
+      }
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        console.log('[PUSH] Permission not granted for push notifications.');
+        return;
+      }
+
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const tokenVal = tokenData.data;
+
+      if (tokenVal) {
+        await api.post('/auth/push-token', { token: tokenVal });
+        console.log('[PUSH] Registered token successfully:', tokenVal);
+      }
+    } catch (err) {
+      console.warn('[PUSH] Failed to register push token:', err.message);
+    }
+  };
+
   // Check for stored token on app launch
   const checkAuth = async () => {
     try {
@@ -33,6 +62,7 @@ export const AuthProvider = ({ children }) => {
           headers: { Authorization: `Bearer ${storedToken}` },
         });
         setUser(normalizeUser(res.data.user));
+        registerPushToken();
       } else {
         setToken(null);
         setUser(null);
@@ -60,6 +90,7 @@ export const AuthProvider = ({ children }) => {
       await storage.setItem('userToken', newToken);
       setToken(newToken);
       setUser(normalizeUser(userData));
+      registerPushToken();
       return { success: true, user: normalizeUser(userData) };
     } catch (err) {
       const errorMessage = err?.response?.data?.error || 'Login failed. Please check your network connection.';
@@ -75,6 +106,7 @@ export const AuthProvider = ({ children }) => {
       await storage.setItem('userToken', newToken);
       setToken(newToken);
       setUser(normalizeUser(userData));
+      registerPushToken();
       return { success: true, user: normalizeUser(userData) };
     } catch (err) {
       const errorMessage = err?.response?.data?.error || 'Admin login failed. Please try again.';

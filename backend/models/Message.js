@@ -76,6 +76,29 @@ const messageSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Edit indicator fields
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    editedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Quoted reply reference
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null,
+    },
+
+    // Forward indicator fields
+    forwardedFrom: {
+      type: Boolean,
+      default: false,
+    },
+
     // Report flags (managed by the report feature, built later).
     // A reported message is EXCLUDED from the automatic 6-month / last-50 cleanup.
     isReported: {

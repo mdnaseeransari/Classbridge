@@ -64,23 +64,17 @@ export default function NewChatSelectionScreen({ navigation }) {
           setAllRecipients(eligible);
         } else {
           // Teachers and Students can only DM Admins and Super Admins.
-          // /admin/users is admin-only — non-admins must hit a different route.
-          // Fetch both roles separately so we don't rely on a single call failing gracefully.
-          const [adminRes, superRes] = await Promise.allSettled([
-            api.get('/admin/users', { params: { role: 'admin',      limit: 50, status: 'approved' } }),
-            api.get('/admin/users', { params: { role: 'superadmin', limit: 50, status: 'approved' } }),
-          ]);
+          // We call our public /chat/admins endpoint which retrieves approved admins/superadmins.
+          const res = await api.get('/chat/admins');
+          const list = res.data.users || [];
 
-          const admins      = adminRes.status === 'fulfilled' ? (adminRes.value.data.users  || []) : [];
-          const superAdmins = superRes.status === 'fulfilled' ? (superRes.value.data.users  || []) : [];
+          // Sort by name
+          list.sort((a, b) => a.name.localeCompare(b.name));
 
-          const combined = [...superAdmins, ...admins].filter((u) => !u.isBanned);
-          combined.sort((a, b) => a.name.localeCompare(b.name));
-
-          if (combined.length === 0) {
+          if (list.length === 0) {
             setError('No administrator contacts are available right now.');
           } else {
-            setAllRecipients(combined);
+            setAllRecipients(list);
           }
         }
       } catch (err) {

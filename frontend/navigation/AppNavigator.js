@@ -22,6 +22,10 @@ import UserDetailScreen from '../screens/admin/UserDetailScreen';
 import AdminLogsScreen from '../screens/admin/AdminLogsScreen';
 import CreateAdminScreen from '../screens/admin/CreateAdminScreen';
 import PromoteToAdminScreen from '../screens/admin/PromoteToAdminScreen';
+import AdminChatMonitoringScreen from '../screens/admin/AdminChatMonitoringScreen';
+import AdminChatMonitoringRoomScreen from '../screens/admin/AdminChatMonitoringRoomScreen';
+import AdminReportsScreen from '../screens/admin/AdminReportsScreen';
+import AdminReportDetailScreen from '../screens/admin/AdminReportDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -120,6 +124,10 @@ function AdminStackNavigator() {
       <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
       <Stack.Screen name="GroupMemberList" component={GroupMemberListScreen} />
       <Stack.Screen name="JoinGroup" component={JoinGroupScreen} />
+      <Stack.Screen name="AdminChatMonitoring" component={AdminChatMonitoringScreen} />
+      <Stack.Screen name="AdminChatMonitoringRoom" component={AdminChatMonitoringRoomScreen} />
+      <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
+      <Stack.Screen name="AdminReportDetail" component={AdminReportDetailScreen} />
     </Stack.Navigator>
   );
 }

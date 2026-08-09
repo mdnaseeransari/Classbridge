@@ -581,6 +581,14 @@ async function getMonitoredMessages(req, res) {
         .skip(skip)
         .limit(PAGE_SIZE)
         .populate('sender', 'name role email phone subject classGrade') // admin view: phone visible
+        .populate({
+          path: 'replyTo',
+          select: '_id content sender type fileName fileUrl',
+          populate: {
+            path: 'sender',
+            select: 'name role email phone subject classGrade',
+          },
+        })
         .lean(),
       Message.countDocuments({ conversation: req.params.id }),
     ]);
@@ -716,6 +724,14 @@ async function getReportDetail(req, res) {
           .sort({ createdAt: -1 })
           .limit(5)
           .populate('sender', 'name role email phone')
+          .populate({
+            path: 'replyTo',
+            select: '_id content sender type fileName fileUrl',
+            populate: {
+              path: 'sender',
+              select: 'name role email phone',
+            },
+          })
           .lean(),
         Message.find({
           conversation: conversationId,
@@ -724,6 +740,14 @@ async function getReportDetail(req, res) {
           .sort({ createdAt: 1 })
           .limit(5)
           .populate('sender', 'name role email phone')
+          .populate({
+            path: 'replyTo',
+            select: '_id content sender type fileName fileUrl',
+            populate: {
+              path: 'sender',
+              select: 'name role email phone',
+            },
+          })
           .lean(),
       ]);
 

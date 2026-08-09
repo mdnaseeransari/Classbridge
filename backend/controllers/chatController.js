@@ -204,6 +204,14 @@ async function getMessages(req, res) {
         .skip(skip)
         .limit(PAGE_SIZE)
         .populate('sender', senderProjection(callerRole))
+        .populate({
+          path: 'replyTo',
+          select: '_id content sender type fileName fileUrl',
+          populate: {
+            path: 'sender',
+            select: senderProjection(callerRole),
+          },
+        })
         .lean(),
       Message.countDocuments({ conversation: req.params.id }),
     ]);
@@ -816,6 +824,208 @@ async function reportMessage(req, res) {
   }
 }
 
+async function listAdmins(req, res) {
+  try {
+    const admins = await User.find(
+      { role: { $in: ['admin', 'superadmin'] }, status: 'approved', isBanned: false },
+      'name role email subject classGrade'
+    ).sort({ name: 1 });
+    return res.status(200).json({ users: admins });
+  } catch (err) {
+    console.error('[CHAT] listAdmins error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function editMessage(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+    const { content } = req.body;
+
+    if (!content || !String(content).trim()) {
+      return res.status(400).json({ error: 'Message content is required.' });
+    }
+
+    const message = await Message.findById(id);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found.' });
+    }
+
+    if (message.isDeleted) {
+      return res.status(400).json({ error: 'Cannot edit a deleted message.' });
+    }
+
+    if (message.sender.toString() !== callerId) {
+      return res.status(403).json({ error: 'You can only edit your own messages.' });
+    }
+
+    message.content = String(content).trim();
+    message.isEdited = true;
+    message.editedAt = new Date();
+    await message.save();
+
+    // Socket broadcast
+    const io = getIO();
+    if (io) {
+      io.to(message.conversation.toString()).emit('message_edited', {
+        _id: message._id,
+        conversation: message.conversation,
+        content: message.content,
+        isEdited: message.isEdited,
+        editedAt: message.editedAt,
+      });
+    }
+
+    return res.status(200).json({ message });
+  } catch (err) {
+    console.error('[CHAT] editMessage error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function deleteMessage(req, res) {
+  try {
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+    const { id } = req.params;
+
+    const message = await Message.findById(id);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found.' });
+    }
+
+    if (message.isDeleted) {
+      return res.status(400).json({ error: 'Message is already deleted.' });
+    }
+
+    const isOwner = message.sender.toString() === callerId;
+    const isUserAdmin = ['admin', 'superadmin'].includes(callerRole);
+
+    if (!isOwner && !isUserAdmin) {
+      return res.status(403).json({ error: 'You are not authorized to delete this message.' });
+    }
+
+    message.isDeleted = true;
+    message.deletedAt = new Date();
+    message.content = null;
+    message.fileUrl = null;
+    message.fileName = null;
+    message.fileMimeType = null;
+    message.fileSizeBytes = null;
+    await message.save();
+
+    // Socket broadcast
+    const io = getIO();
+    if (io) {
+      io.to(message.conversation.toString()).emit('message_deleted', {
+        _id: message._id,
+        conversation: message.conversation,
+      });
+    }
+
+    return res.status(200).json({ message: 'Message deleted successfully.' });
+  } catch (err) {
+    console.error('[CHAT] deleteMessage error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function forwardMessage(req, res) {
+  try {
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+    const { id } = req.params;
+    const { conversationId: targetConversationId } = req.body;
+
+    if (!targetConversationId) {
+      return res.status(400).json({ error: 'conversationId is required to forward.' });
+    }
+
+    const message = await Message.findById(id);
+    if (!message) {
+      return res.status(404).json({ error: 'Original message not found.' });
+    }
+
+    if (message.isDeleted) {
+      return res.status(400).json({ error: 'Cannot forward a deleted message.' });
+    }
+
+    // Verify participant in source conversation
+    const sourceConvo = await Conversation.findById(message.conversation).select('participants');
+    if (!sourceConvo || !sourceConvo.participants.some(p => p.toString() === callerId)) {
+      return res.status(403).json({ error: 'You do not have permission to forward this message.' });
+    }
+
+    // Verify participant in target conversation
+    const targetConvo = await Conversation.findById(targetConversationId).select('participants type');
+    if (!targetConvo) {
+      return res.status(404).json({ error: 'Target conversation not found.' });
+    }
+
+    if (!targetConvo.participants.some(p => p.toString() === callerId)) {
+      return res.status(403).json({ error: 'You are not a participant in the target conversation.' });
+    }
+
+    // Direct chat validation for target
+    if (targetConvo.type === 'direct') {
+      const otherParticipantId = targetConvo.participants.find(p => p.toString() !== callerId);
+      const otherUser = await User.findById(otherParticipantId).select('role');
+      if (!otherUser || !canDirectChat(callerRole, otherUser.role)) {
+        return res.status(403).json({ error: 'Direct chat is not permitted between these roles in the target conversation.' });
+      }
+    }
+
+    const newMessage = await Message.create({
+      conversation: targetConversationId,
+      sender: callerId,
+      content: message.content,
+      type: message.type,
+      fileUrl: message.fileUrl,
+      fileName: message.fileName,
+      fileMimeType: message.fileMimeType,
+      fileSizeBytes: message.fileSizeBytes,
+      forwardedFrom: true,
+    });
+
+    await Conversation.findByIdAndUpdate(targetConversationId, {
+      lastMessage: newMessage._id,
+      lastActivityAt: newMessage.createdAt,
+    });
+
+    await newMessage.populate('sender', senderProjection(callerRole));
+
+    // Socket broadcast to target conversation
+    const io = getIO();
+    if (io) {
+      const payload = {
+        _id: newMessage._id,
+        conversation: targetConversationId,
+        content: newMessage.content,
+        type: newMessage.type,
+        fileUrl: newMessage.fileUrl,
+        fileName: newMessage.fileName,
+        fileMimeType: newMessage.fileMimeType,
+        fileSizeBytes: newMessage.fileSizeBytes,
+        forwardedFrom: newMessage.forwardedFrom,
+        createdAt: newMessage.createdAt,
+        readBy: [],
+        sender: {
+          _id: newMessage.sender._id,
+          name: newMessage.sender.name,
+          role: newMessage.sender.role,
+        },
+      };
+      io.to(targetConversationId).emit('message_received', payload);
+    }
+
+    return res.status(201).json({ message: newMessage });
+  } catch (err) {
+    console.error('[CHAT] forwardMessage error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 module.exports = {
   getOrCreateDirect,
   listConversations,
@@ -831,5 +1041,9 @@ module.exports = {
   joinViaInvite,
   sendFileAttachment,
   reportMessage,
+  listAdmins,
+  editMessage,
+  deleteMessage,
+  forwardMessage,
 };
 

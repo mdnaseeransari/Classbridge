@@ -16,6 +16,10 @@ const {
   joinViaInvite,
   sendFileAttachment,
   reportMessage,
+  listAdmins,
+  editMessage,
+  deleteMessage,
+  forwardMessage,
 } = require('../controllers/chatController');
 
 const router = express.Router();
@@ -44,6 +48,13 @@ router.post('/direct', getOrCreateDirect);
  * @access  Any approved user
  */
 router.get('/conversations', listConversations);
+
+/**
+ * @route   GET /api/chat/admins
+ * @desc    List all active admins/superadmins (for messaging by teachers/students).
+ * @access  Any approved user
+ */
+router.get('/admins', listAdmins);
 
 /**
  * @route   GET /api/chat/conversations/:id
@@ -140,5 +151,28 @@ router.post('/conversations/:id/attachment', uploadAttachment, sendFileAttachmen
  * @access  Any approved conversation participant
  */
 router.post('/messages/:id/report', reportMessage);
+
+/**
+ * @route   PATCH /api/chat/messages/:id
+ * @desc    Edit text content of a message (sender only).
+ * @body    { content }
+ * @access  Sender of the message
+ */
+router.patch('/messages/:id', editMessage);
+
+/**
+ * @route   DELETE /api/chat/messages/:id
+ * @desc    Soft-delete a message (sender or admin only).
+ * @access  Sender or Admin/Super Admin
+ */
+router.delete('/messages/:id', deleteMessage);
+
+/**
+ * @route   POST /api/chat/messages/:id/forward
+ * @desc    Forward a message to another conversation.
+ * @body    { conversationId }
+ * @access  Any approved conversation participant
+ */
+router.post('/messages/:id/forward', forwardMessage);
 
 module.exports = router;

@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,18 +7,44 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/AuthContext';
+import api from '../../services/api';
 
 export default function AdminDashboardScreen({ navigation }) {
   const { user, logout } = useContext(AuthContext);
   const isSuperAdmin = user?.role === 'superadmin';
+  const [pendingReportCount, setPendingReportCount] = useState(0);
 
-  const NavCard = ({ title, subtitle, color, onPress, icon }) => (
+  const fetchPendingReportCount = async () => {
+    try {
+      const res = await api.get('/admin/reports', { params: { status: 'pending', limit: 1 } });
+      const total = res.data.pagination?.total || 0;
+      setPendingReportCount(total);
+    } catch (err) {
+      console.error('[DASHBOARD] Error fetching report count:', err);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPendingReportCount();
+    }, [])
+  );
+
+  const NavCard = ({ title, subtitle, color, onPress, icon, badgeCount }) => (
     <TouchableOpacity style={[styles.card, { borderLeftColor: color }]} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.cardContent}>
         <Text style={styles.cardIcon}>{icon}</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>{title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.cardTitle}>{title}</Text>
+            {badgeCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{badgeCount}</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.cardSubtitle}>{subtitle}</Text>
         </View>
         <Text style={styles.cardArrow}>›</Text>
@@ -71,6 +97,24 @@ export default function AdminDashboardScreen({ navigation }) {
           color="#a78bfa"
           icon="📋"
           onPress={() => navigation.navigate('AdminLogs')}
+        />
+
+        {/* Monitoring & Moderation */}
+        <Text style={styles.section}>Monitoring & Moderation</Text>
+        <NavCard
+          title="Monitor Chats"
+          subtitle="View all direct & group chats read-only"
+          color="#38bdf8"
+          icon="🛡️"
+          onPress={() => navigation.navigate('AdminChatMonitoring')}
+        />
+        <NavCard
+          title="Reports Queue"
+          subtitle="Review reported message violations"
+          color="#ef4444"
+          icon="⚠️"
+          onPress={() => navigation.navigate('AdminReports')}
+          badgeCount={pendingReportCount}
         />
 
         {/* Super Admin Only */}
@@ -173,5 +217,19 @@ const styles = StyleSheet.create({
   cardArrow: {
     fontSize: 22,
     color: '#475569',
+  },
+  badge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
   },
 });

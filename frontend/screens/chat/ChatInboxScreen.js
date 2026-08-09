@@ -16,6 +16,10 @@ import { connectSocket, getSocket } from '../../services/socket';
 
 export default function ChatInboxScreen({ navigation }) {
   const { user } = useContext(AuthContext);
+  const rootNav = () => 
+    navigation.getParent()?.getParent() ?? 
+    navigation.getParent() ?? 
+    navigation;
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -169,15 +173,15 @@ export default function ChatInboxScreen({ navigation }) {
     // Navigate to select recipient.
     // getParent() is needed when this screen is mounted inside a Tab (AdminTabNavigator);
     // the Tab's navigation prop does not reach stack screens in the parent navigator.
-    (navigation.getParent() ?? navigation).navigate('NewChatSelection');
+    rootNav().navigate('NewChatSelection');
   };
 
   const handleCreateGroup = () => {
-    (navigation.getParent() ?? navigation).navigate('CreateGroup');
+    rootNav().navigate('CreateGroup');
   };
 
   const handleJoinGroup = () => {
-    (navigation.getParent() ?? navigation).navigate('JoinGroup');
+    rootNav().navigate('JoinGroup');
   };
 
   const renderItem = ({ item }) => {
@@ -205,7 +209,7 @@ export default function ChatInboxScreen({ navigation }) {
         activeOpacity={0.75}
         onPress={() => {
           // Same parent-escape pattern: ChatRoom is a stack screen, not a tab screen.
-          (navigation.getParent() ?? navigation).navigate('ChatRoom', { conversationId: item._id, title });
+          rootNav().navigate('ChatRoom', { conversationId: item._id, title });
         }}
       >
         <View style={styles.avatarContainer}>

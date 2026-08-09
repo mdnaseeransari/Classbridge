@@ -59,7 +59,7 @@ export default function CreateGroupScreen({ navigation }) {
 
     setSubmitting(true);
     try {
-      const res = await api.post('/api/chat/groups', {
+      const res = await api.post('/chat/groups', {
         name: groupName.trim(),
         participantIds: Array.from(selectedIds),
       });

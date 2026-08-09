@@ -136,7 +136,8 @@ export default function GroupSettingsScreen({ route, navigation }) {
             try {
               await api.delete(`/chat/groups/${conversationId}`);
               Alert.alert('Success', 'Group deleted.');
-              navigation.navigate('UserTabs', { screen: 'Chat' });
+              navigation.getParent()?.getParent()?.navigate('AdminTabs') ?? 
+              navigation.getParent()?.navigate('AdminTabs');
             } catch (err) {
               Alert.alert('Error', err?.response?.data?.error || 'Failed to delete group.');
             }
@@ -243,14 +244,14 @@ export default function GroupSettingsScreen({ route, navigation }) {
           ) : null}
 
           {group?.participants?.map((p) => {
-            const isCreator = p._id === group.createdBy;
+            const isCreator = String(p._id) === String(group.createdBy);
             return (
               <View key={p._id} style={styles.userItem}>
                 <View>
                   <Text style={styles.userName}>{p.name}</Text>
                   <Text style={styles.userRole}>{p.role.toUpperCase()} {isCreator && '· CREATOR'}</Text>
                 </View>
-                {p._id !== group.createdBy && p._id !== group.groupAdmin && (
+                {String(p._id) !== String(group.createdBy) && (
                   <TouchableOpacity style={styles.removeBtn} onPress={() => handleRemoveMember(p._id)}>
                     <Text style={styles.removeText}>Remove</Text>
                   </TouchableOpacity>
