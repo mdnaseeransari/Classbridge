@@ -66,29 +66,34 @@ export default function ChatRoomScreen({ route, navigation }) {
     fetchConvoDetails();
     fetchMessages();
 
+    const onMessageReceived = (newMsg) => {
+      if (newMsg.conversation === conversationId) {
+        setMessages((prev) => [newMsg, ...prev]);
+        if (socketRef.current) {
+          socketRef.current.emit('mark_read', { conversationId });
+        }
+      }
+    };
+
+    const onTyping = ({ conversationId: cId, userId, isTyping: typingStatus }) => {
+      if (cId === conversationId && userId !== user?._id) {
+        setIsTyping(typingStatus);
+      }
+    };
+
     if (socketRef.current) {
       socketRef.current.emit('join_conversation', { conversationId });
       socketRef.current.emit('mark_read', { conversationId });
 
-      socketRef.current.on('message_received', (newMsg) => {
-        if (newMsg.conversation === conversationId) {
-          setMessages((prev) => [newMsg, ...prev]);
-          socketRef.current.emit('mark_read', { conversationId });
-        }
-      });
-
-      socketRef.current.on('typing', ({ conversationId: cId, userId, isTyping: typingStatus }) => {
-        if (cId === conversationId && userId !== user?._id) {
-          setIsTyping(typingStatus);
-        }
-      });
+      socketRef.current.on('message_received', onMessageReceived);
+      socketRef.current.on('typing', onTyping);
     }
 
     return () => {
       if (socketRef.current) {
         socketRef.current.emit('leave_conversation', { conversationId });
-        socketRef.current.off('message_received');
-        socketRef.current.off('typing');
+        socketRef.current.off('message_received', onMessageReceived);
+        socketRef.current.off('typing', onTyping);
       }
     };
   }, [conversationId]);

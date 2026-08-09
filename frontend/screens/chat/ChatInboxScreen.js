@@ -25,6 +25,7 @@ export default function ChatInboxScreen({ navigation }) {
     try {
       const res = await api.get('/chat/conversations');
       const convos = res.data.conversations || [];
+      console.log('[DEBUG_INBOX] Raw Conversations:', JSON.stringify(convos, null, 2));
       setConversations(convos);
 
       // Collect user IDs to query initial online status
@@ -53,41 +54,39 @@ export default function ChatInboxScreen({ navigation }) {
 
   // Connect socket and listen to events when screen mounts
   useEffect(() => {
-    let socketInstance = getSocket();
-
     // ── Named handlers so we can remove exactly these listeners later ────────
     // Using .off(eventName) without a fn reference removes ALL listeners for
     // that event, which would clobber ChatRoomScreen's own message_received
     // handler if both screens are in the stack simultaneously.
 
     const onMessageReceived = (msg) => {
+      console.log('[INBOX-LISTENER-ALIVE]', Date.now());
+      // DIAGNOSTIC — remove once confirmed working
+      console.log('[INBOX] message_received fired. msg.conversation:', msg.conversation,
+        '| type:', typeof msg.conversation);
+
       // Update the matching conversation in-place — no HTTP round-trip needed.
       // msg fields: { _id, conversation (id string), content, type, createdAt, sender }
-      setConversations((prev) => {
-        const idx = prev.findIndex((c) => c._id === msg.conversation);
-        if (idx === -1) return prev; // message for a conversation not yet loaded
-
+      setConversations(prev => {
+        const idx = prev.findIndex(c => c._id === msg.conversation);
+        if (idx === -1) return prev;
         const updated = {
           ...prev[idx],
           lastMessage: {
-            // preserve any existing fields (type, fileUrl, etc.) then patch
-            ...(prev[idx].lastMessage || {}),
+            _id: msg._id,
             content: msg.content,
             type: msg.type,
-            createdAt: msg.createdAt,
             sender: msg.sender,
+            createdAt: msg.createdAt,
           },
           lastActivityAt: msg.createdAt,
-          // Increment unread count if this is not our own message
-          unreadCount:
-            msg.sender?._id !== user?._id
-              ? (prev[idx].unreadCount || 0) + 1
-              : prev[idx].unreadCount || 0,
+          unreadCount: msg.sender?._id !== user?._id 
+            ? (prev[idx].unreadCount || 0) + 1 
+            : prev[idx].unreadCount || 0,
         };
-
-        // Remove the updated conversation and move it to the front (most recent)
-        const next = prev.filter((_, i) => i !== idx);
-        return [updated, ...next];
+        const newList = [...prev];
+        newList.splice(idx, 1);
+        return [updated, ...newList];
       });
     };
 
@@ -108,28 +107,47 @@ export default function ChatInboxScreen({ navigation }) {
       setOnlineUsers((prev) => ({ ...prev, [userId]: false }));
     };
 
+    let socketInstance = null;
+
+    const attachListeners = () => {
+      if (!socketInstance) return;
+      console.log('[INBOX] Attaching socket listeners. socket.id:', socketInstance.id,
+        '| connected:', socketInstance.connected);
+      socketInstance.off('message_received', onMessageReceived);
+      socketInstance.on('message_received', onMessageReceived);
+      socketInstance.off('messages_read', onMessagesRead);
+      socketInstance.on('messages_read', onMessagesRead);
+      socketInstance.off('user_online', onUserOnline);
+      socketInstance.on('user_online', onUserOnline);
+      socketInstance.off('user_offline', onUserOffline);
+      socketInstance.on('user_offline', onUserOffline);
+    };
+
     const setupSocket = async () => {
+      socketInstance = getSocket();
       if (!socketInstance) {
         socketInstance = await connectSocket();
       }
+      if (!socketInstance) return;
 
-      if (socketInstance) {
-        socketInstance.on('message_received', onMessageReceived);
-        socketInstance.on('messages_read', onMessagesRead);
-        socketInstance.on('user_online', onUserOnline);
-        socketInstance.on('user_offline', onUserOffline);
+      if (socketInstance.connected) {
+        attachListeners();
+      } else {
+        socketInstance.once('connect', attachListeners);
       }
     };
 
     setupSocket();
 
     return () => {
-      if (socketInstance) {
-        // Remove only THIS screen's handlers, not all listeners for these events
-        socketInstance.off('message_received', onMessageReceived);
-        socketInstance.off('messages_read', onMessagesRead);
-        socketInstance.off('user_online', onUserOnline);
-        socketInstance.off('user_offline', onUserOffline);
+      const s = getSocket() || socketInstance;
+      if (s) {
+        s.off('connect', attachListeners);
+        s.off('message_received', onMessageReceived);
+        s.off('messages_read', onMessagesRead);
+        s.off('user_online', onUserOnline);
+        s.off('user_offline', onUserOffline);
+        s.off('connect_error');
       }
     };
   }, [user?._id]); // re-run if user changes (e.g. after login/logout cycle)
@@ -255,6 +273,7 @@ export default function ChatInboxScreen({ navigation }) {
         <FlatList
           data={conversations}
           keyExtractor={(item) => item._id}
+          extraData={{ conversations, onlineUsers }}
           renderItem={renderItem}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#38bdf8" />

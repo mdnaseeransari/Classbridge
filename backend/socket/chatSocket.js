@@ -32,6 +32,12 @@ function safeSenderFields(sender, callerRole) {
   return base;
 }
 
+let ioInstance = null;
+
+function getIO() {
+  return ioInstance;
+}
+
 // ─── In-memory online presence registry ──────────────────────────────────────
 // Map<userId (string), Set<socketId (string)>>
 // A user is "online" if they have at least one active socket connection.
@@ -46,6 +52,7 @@ function userIsOnline(userId) {
 // Call this once after creating the Socket.io server instance.
 // ─────────────────────────────────────────────────────────────────────────────
 function initChatSocket(io) {
+  ioInstance = io;
 
   // ── Socket.io JWT auth middleware ──────────────────────────────────────────
   // Runs before the 'connection' event for every socket.
@@ -90,6 +97,19 @@ function initChatSocket(io) {
     // ── Register online presence ─────────────────────────────────────────────
     if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
     onlineUsers.get(userId).add(socket.id);
+
+    // Automatically join all conversation rooms the user participates in
+    (async () => {
+      try {
+        const convos = await Conversation.find({ participants: userId }).select('_id');
+        convos.forEach((c) => {
+          socket.join(c._id.toString());
+        });
+        console.log(`[SOCKET] User ${userId} auto-joined ${convos.length} rooms.`);
+      } catch (err) {
+        console.error('[SOCKET] Error auto-joining rooms on connect:', err);
+      }
+    })();
 
     // Broadcast to everyone that this user is now online
     socket.broadcast.emit('user_online', { userId });
@@ -354,4 +374,4 @@ function emitError(socket, message) {
   socket.emit('chat_error', { error: message });
 }
 
-module.exports = { initChatSocket, onlineUsers, userIsOnline };
+module.exports = { initChatSocket, onlineUsers, userIsOnline, getIO };

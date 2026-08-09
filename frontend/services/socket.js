@@ -8,6 +8,11 @@ let socket = null;
 
 export const connectSocket = async (onConnectedChange) => {
   try {
+    if (socket && socket.connected) {
+      if (onConnectedChange) onConnectedChange(true);
+      return socket;
+    }
+
     if (socket) {
       socket.disconnect();
     }
@@ -17,7 +22,10 @@ export const connectSocket = async (onConnectedChange) => {
 
     socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket'],
+      // 'websocket' is preferred; 'polling' is the fallback for web environments
+      // where a direct WebSocket upgrade may be blocked by the browser, proxy, or CORS.
+      // Removing 'polling' causes a silent connection failure on web.
+      transports: ['websocket', 'polling'],
       autoConnect: true,
     });
 

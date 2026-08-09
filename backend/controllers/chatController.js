@@ -4,7 +4,7 @@ const Message = require('../models/Message');
 const GroupInvite = require('../models/GroupInvite');
 const { uploadToCloudinary } = require('../utils/cloudinary');
 const { sendExpoPushNotifications } = require('../utils/pushNotifications');
-const { userIsOnline } = require('../socket/chatSocket');
+const { userIsOnline, getIO } = require('../socket/chatSocket');
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const ADMIN_ROLES = ['admin', 'superadmin'];
@@ -717,6 +717,29 @@ async function sendFileAttachment(req, res) {
         console.error('[CHAT] sendFileAttachment push notification error:', pushErr);
       }
     })();
+
+    // Emit message_received socket event to the room
+    const io = getIO();
+    if (io) {
+      const payload = {
+        _id: message._id,
+        conversation: conversationId,
+        content: message.content,
+        type: message.type,
+        fileUrl: message.fileUrl,
+        fileName: message.fileName,
+        fileMimeType: message.fileMimeType,
+        fileSizeBytes: message.fileSizeBytes,
+        createdAt: message.createdAt,
+        readBy: [],
+        sender: {
+          _id: message.sender._id,
+          name: message.sender.name,
+          role: message.sender.role,
+        },
+      };
+      io.to(conversationId).emit('message_received', payload);
+    }
 
     return res.status(201).json({ message });
   } catch (err) {
