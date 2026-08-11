@@ -18,6 +18,7 @@ import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 import { connectSocket, getSocket } from '../../services/socket';
 import ChatRoomScreen from './ChatRoomScreen';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ChatInboxScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -313,11 +314,13 @@ export default function ChatInboxScreen({ navigation }) {
   
           <View style={styles.details}>
             <View style={styles.row}>
-              <Text style={styles.name} numberOfLines={1}>
-                {item.isPinned && '📌 '}
-                {item.isMuted && '🔇 '}
-                {title}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {title}
+                </Text>
+                {item.isPinned && <Ionicons name="pin" size={14} color="#fbbf24" />}
+                {item.isMuted && <Ionicons name="volume-mute" size={14} color="#64748b" />}
+              </View>
               <Text style={styles.time}>{formattedTime}</Text>
             </View>
             <View style={styles.row}>
@@ -334,9 +337,9 @@ export default function ChatInboxScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => handleLongPress(item)}
-          style={{ paddingHorizontal: 16, paddingVertical: 20 }}
+          style={{ paddingHorizontal: 16, paddingVertical: 20, justifyContent: 'center' }}
         >
-          <Text style={{ color: '#64748b', fontSize: 18, fontWeight: '700' }}>⋮</Text>
+          <Ionicons name="ellipsis-vertical" size={20} color="#64748b" />
         </TouchableOpacity>
       </View>
     );
@@ -349,8 +352,9 @@ export default function ChatInboxScreen({ navigation }) {
       <View style={{ flex: 1, backgroundColor: '#0a0e1a' }}>
         <View style={styles.header}>
           {showArchived ? (
-            <TouchableOpacity onPress={() => setShowArchived(false)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.backText}>← Inbox</Text>
+            <TouchableOpacity onPress={() => setShowArchived(false)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="arrow-back" size={20} color="#2563eb" />
+              <Text style={styles.backText}>Inbox</Text>
             </TouchableOpacity>
           ) : (
             <Text style={styles.headerTitle}>Messages</Text>
@@ -384,7 +388,8 @@ export default function ChatInboxScreen({ navigation }) {
             style={styles.archiveHeaderRow}
             onPress={() => setShowArchived(true)}
           >
-            <Text style={styles.archiveHeaderText}>📁 Archived Conversations</Text>
+            <Ionicons name="archive" size={18} color="#2563eb" style={{ marginRight: 8 }} />
+            <Text style={styles.archiveHeaderText}>Archived Conversations</Text>
           </TouchableOpacity>
         )}
 
@@ -454,38 +459,41 @@ export default function ChatInboxScreen({ navigation }) {
             <Text style={[styles.modalTitle, { marginBottom: 12 }]}>Conversation Options</Text>
             
             <TouchableOpacity
-              style={styles.actionMenuBtn}
+              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
               onPress={() => {
                 setActionMenuVisible(false);
                 togglePin(selectedConvo?._id, selectedConvo?.isPinned);
               }}
             >
+              <Ionicons name={selectedConvo?.isPinned ? 'pin' : 'pin-outline'} size={18} color="#2563eb" />
               <Text style={styles.actionMenuBtnText}>
-                {selectedConvo?.isPinned ? 'Unpin Chat 📌' : 'Pin Chat 📌'}
+                {selectedConvo?.isPinned ? 'Unpin Chat' : 'Pin Chat'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionMenuBtn}
+              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
               onPress={() => {
                 setActionMenuVisible(false);
                 toggleArchive(selectedConvo?._id, selectedConvo?.isArchived);
               }}
             >
+              <Ionicons name={selectedConvo?.isArchived ? 'archive' : 'archive-outline'} size={18} color="#2563eb" />
               <Text style={styles.actionMenuBtnText}>
-                {selectedConvo?.isArchived ? 'Unarchive Chat 📁' : 'Archive Chat 📁'}
+                {selectedConvo?.isArchived ? 'Unarchive Chat' : 'Archive Chat'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionMenuBtn}
+              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
               onPress={() => {
                 setActionMenuVisible(false);
                 toggleMute(selectedConvo?._id, selectedConvo?.isMuted);
               }}
             >
+              <Ionicons name={selectedConvo?.isMuted ? 'volume-high' : 'volume-mute'} size={18} color="#2563eb" />
               <Text style={styles.actionMenuBtnText}>
-                {selectedConvo?.isMuted ? 'Unmute Chat 🔊' : 'Mute Chat 🔇'}
+                {selectedConvo?.isMuted ? 'Unmute Chat' : 'Mute Chat'}
               </Text>
             </TouchableOpacity>
 

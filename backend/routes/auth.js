@@ -1,6 +1,15 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { signup, loginTeacherStudent, loginAdmin, getMe, updatePushToken } = require('../controllers/authController');
+const {
+  signup,
+  loginTeacherStudent,
+  loginAdmin,
+  getMe,
+  updatePushToken,
+  updateProfile,
+  changePassword,
+  createForgotRequest
+} = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -58,6 +67,30 @@ router.post('/login/admin', loginRateLimiter, loginAdmin);
  * @access  Private (requires valid JWT)
  */
 router.get('/me', authenticate, getMe);
+
+/**
+ * @route   PATCH /api/auth/profile
+ * @desc    Update user's profile (name, phone).
+ * @access  Private (requires valid JWT)
+ * @body    { name, phone }
+ */
+router.patch('/profile', authenticate, updateProfile);
+
+/**
+ * @route   PATCH /api/auth/change-password
+ * @desc    Change user's password or PIN.
+ * @access  Private (requires valid JWT)
+ * @body    { oldCredential, newCredential }
+ */
+router.patch('/change-password', authenticate, changePassword);
+
+/**
+ * @route   POST /api/auth/forgot-request
+ * @desc    Create a forgot password/PIN reset request.
+ * @access  Public
+ * @body    { email, phone }
+ */
+router.post('/forgot-request', createForgotRequest);
 
 /**
  * @route   POST /api/auth/push-token

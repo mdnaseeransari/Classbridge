@@ -9,8 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import api from '../../services/api';
 
 export default function AdminLoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -54,10 +56,10 @@ export default function AdminLoginScreen({ navigation }) {
         ) : null}
 
         <View style={styles.form}>
-          <Text style={styles.label}>Admin Email</Text>
+          <Text style={styles.label}>Email Address</Text>
           <TextInput
             style={styles.input}
-            placeholder="admin@classbridge.org"
+            placeholder="admin@classbridge.com"
             placeholderTextColor="#94a3b8"
             keyboardType="email-address"
             autoCapitalize="none"
@@ -68,7 +70,7 @@ export default function AdminLoginScreen({ navigation }) {
           <Text style={styles.label}>Password</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter password"
+            placeholder="••••••••"
             placeholderTextColor="#94a3b8"
             secureTextEntry
             value={password}
@@ -88,6 +90,10 @@ export default function AdminLoginScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={styles.footerLinks}>
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotRequest', { type: 'password' })} style={{ marginBottom: 12 }}>
+              <Text style={[styles.linkText, { color: '#38bdf8', fontWeight: '600', textAlign: 'center' }]}>Forgot Password?</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
               <Text style={styles.linkText}>Back to <Text style={styles.linkBold}>Teacher / Student Login</Text></Text>
             </TouchableOpacity>

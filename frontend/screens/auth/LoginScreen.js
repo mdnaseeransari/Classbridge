@@ -9,8 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import api from '../../services/api';
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
@@ -90,6 +92,10 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={styles.footerLinks}>
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotRequest', { type: 'pin' })} style={{ marginBottom: 12 }}>
+              <Text style={[styles.linkText, { color: '#38bdf8', fontWeight: '600', textAlign: 'center' }]}>Forgot PIN?</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
               <Text style={styles.linkText}>Don't have an account? <Text style={styles.linkBold}>Sign Up</Text></Text>
             </TouchableOpacity>

@@ -8,6 +8,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 
@@ -15,6 +16,7 @@ export default function AdminDashboardScreen({ navigation }) {
   const { user, logout } = useContext(AuthContext);
   const isSuperAdmin = user?.role === 'superadmin';
   const [pendingReportCount, setPendingReportCount] = useState(0);
+  const [pendingResetCount, setPendingResetCount] = useState(0);
 
   const fetchPendingReportCount = async () => {
     try {
@@ -26,16 +28,27 @@ export default function AdminDashboardScreen({ navigation }) {
     }
   };
 
+  const fetchPendingResetCount = async () => {
+    try {
+      const res = await api.get('/admin/reset-requests');
+      const count = res.data.requests?.length || 0;
+      setPendingResetCount(count);
+    } catch (err) {
+      console.error('[DASHBOARD] Error fetching reset count:', err);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchPendingReportCount();
+      fetchPendingResetCount();
     }, [])
   );
 
   const NavCard = ({ title, subtitle, color, onPress, icon, badgeCount }) => (
     <TouchableOpacity style={[styles.card, { borderLeftColor: color }]} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.cardContent}>
-        <Text style={styles.cardIcon}>{icon}</Text>
+        <View style={styles.cardIconContainer}>{icon}</View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={styles.cardTitle}>{title}</Text>
@@ -47,7 +60,7 @@ export default function AdminDashboardScreen({ navigation }) {
           </View>
           <Text style={styles.cardSubtitle}>{subtitle}</Text>
         </View>
-        <Text style={styles.cardArrow}>›</Text>
+        <Ionicons name="chevron-forward" size={20} color="#64748b" />
       </View>
     </TouchableOpacity>
   );
@@ -78,23 +91,31 @@ export default function AdminDashboardScreen({ navigation }) {
           title="All Users"
           subtitle="Browse, filter, search all users"
           color="#2563eb"
-          icon="👥"
+          icon={<Ionicons name="people" size={24} color="#2563eb" />}
           onPress={() => navigation.navigate('UserList')}
         />
         <NavCard
           title="Pending Approvals"
           subtitle="Review and approve new sign-ups"
-          color="#2563eb"
-          icon="⏳"
+          color="#fbbf24"
+          icon={<Ionicons name="hourglass" size={24} color="#fbbf24" />}
           onPress={() => navigation.navigate('PendingApprovals')}
+        />
+        <NavCard
+          title="Reset Requests"
+          subtitle="Approve forgot password/PIN requests"
+          color="#06b6d4"
+          icon={<Ionicons name="key" size={24} color="#06b6d4" />}
+          onPress={() => navigation.navigate('AdminResetRequests')}
+          badgeCount={pendingResetCount}
         />
         {/* Monitoring & Moderation */}
         <Text style={styles.section}>Monitoring & Moderation</Text>
         <NavCard
           title="Reports Queue"
           subtitle="Review reported message violations"
-          color="#fbbf24"
-          icon="⚠️"
+          color="#ef4444"
+          icon={<Ionicons name="warning" size={24} color="#ef4444" />}
           onPress={() => navigation.navigate('AdminReports')}
           badgeCount={pendingReportCount}
         />
@@ -106,8 +127,8 @@ export default function AdminDashboardScreen({ navigation }) {
             <NavCard
               title="Create Admin Account"
               subtitle="Add a new administrator directly"
-              color="#2563eb"
-              icon="➕"
+              color="#10b981"
+              icon={<Ionicons name="add-circle" size={24} color="#10b981" />}
               onPress={() => navigation.navigate('CreateAdmin')}
             />
           </>
@@ -186,8 +207,13 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 14,
   },
-  cardIcon: {
-    fontSize: 22,
+  cardIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(30, 41, 59, 0.5)',
   },
   cardTitle: {
     fontSize: 15,
@@ -198,10 +224,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     marginTop: 2,
-  },
-  cardArrow: {
-    fontSize: 22,
-    color: '#64748b',
   },
   badge: {
     backgroundColor: '#ef4444',

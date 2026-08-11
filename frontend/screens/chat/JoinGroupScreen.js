@@ -9,6 +9,7 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
 import { COLORS, SPACING, RADIUS } from '../../theme';
 
@@ -45,8 +46,9 @@ export default function JoinGroupScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>✕ Cancel</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="close" size={18} color={COLORS.textSecondary} />
+          <Text style={styles.backText}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Join Group</Text>
         <View style={{ width: 50 }} />

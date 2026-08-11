@@ -142,6 +142,7 @@ export const AuthProvider = ({ children }) => {
       value={{
         token,
         user,
+        setUser,
         loading,
         loginTeacherStudent,
         loginAdmin,

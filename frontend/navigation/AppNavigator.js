@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -10,6 +11,7 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import AdminLoginScreen from '../screens/auth/AdminLoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
 import PendingApprovalScreen from '../screens/auth/PendingApprovalScreen';
+import ForgotRequestScreen from '../screens/auth/ForgotRequestScreen';
 
 // Main User Screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -24,6 +26,7 @@ import CreateAdminScreen from '../screens/admin/CreateAdminScreen';
 import PromoteToAdminScreen from '../screens/admin/PromoteToAdminScreen';
 import AdminReportsScreen from '../screens/admin/AdminReportsScreen';
 import AdminReportDetailScreen from '../screens/admin/AdminReportDetailScreen';
+import AdminResetRequestsScreen from '../screens/admin/AdminResetRequestsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -40,6 +43,7 @@ function AuthStack() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="ForgotRequest" component={ForgotRequestScreen} />
     </Stack.Navigator>
   );
 }
@@ -53,6 +57,7 @@ import CreateGroupScreen from '../screens/chat/CreateGroupScreen';
 import GroupSettingsScreen from '../screens/chat/GroupSettingsScreen';
 import GroupMemberListScreen from '../screens/chat/GroupMemberListScreen';
 import JoinGroupScreen from '../screens/chat/JoinGroupScreen';
+import SettingsScreen from '../screens/main/SettingsScreen';
 
 function UserStackNavigator() {
   return (
@@ -64,6 +69,7 @@ function UserStackNavigator() {
       <UserStack.Screen name="GroupSettings" component={GroupSettingsScreen} />
       <UserStack.Screen name="GroupMemberList" component={GroupMemberListScreen} />
       <UserStack.Screen name="JoinGroup" component={JoinGroupScreen} />
+      <UserStack.Screen name="Settings" component={SettingsScreen} />
     </UserStack.Navigator>
   );
 }
@@ -82,14 +88,21 @@ function UserTabNavigator() {
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🏠</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={20} color={color} />,
         }}
       />
       <Tab.Screen
         name="Chat"
         component={ChatInboxScreen}
         options={{
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💬</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="chatbubble" size={20} color={color} />,
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarIcon: ({ color }) => <Ionicons name="settings" size={20} color={color} />,
         }}
       />
     </Tab.Navigator>
@@ -112,7 +125,7 @@ function AdminTabNavigator() {
         component={AdminDashboardScreen}
         options={{
           tabBarLabel: 'Dashboard',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🛡️</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="shield-checkmark" size={20} color={color} />,
         }}
       />
       <Tab.Screen
@@ -120,7 +133,15 @@ function AdminTabNavigator() {
         component={ChatInboxScreen}
         options={{
           tabBarLabel: 'Chat',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💬</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="chatbubble" size={20} color={color} />,
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarLabel: 'Settings',
+          tabBarIcon: ({ color }) => <Ionicons name="settings" size={20} color={color} />,
         }}
       />
     </Tab.Navigator>
@@ -150,6 +171,8 @@ function AdminStackNavigator() {
       <Stack.Screen name="JoinGroup" component={JoinGroupScreen} />
       <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
       <Stack.Screen name="AdminReportDetail" component={AdminReportDetailScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="AdminResetRequests" component={AdminResetRequestsScreen} />
     </Stack.Navigator>
   );
 }

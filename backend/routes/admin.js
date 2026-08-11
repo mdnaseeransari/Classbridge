@@ -17,6 +17,8 @@ const {
   listReports,
   getReportDetail,
   actionReport,
+  listResetRequests,
+  resolveResetRequest,
 } = require('../controllers/adminController');
 
 const router = express.Router();
@@ -164,5 +166,22 @@ router.get('/reports/:id', getReportDetail);
  * @access  admin | superadmin
  */
 router.patch('/reports/:id/action', actionReport);
+
+// ─── Password Reset Request Queue & Actions ─────────────────────────────────────
+
+/**
+ * @route   GET /api/admin/reset-requests
+ * @desc    List pending password/PIN reset requests.
+ * @access  admin | superadmin
+ */
+router.get('/reset-requests', listResetRequests);
+
+/**
+ * @route   POST /api/admin/reset-requests/:id/resolve
+ * @desc    Approve or reject a password/PIN reset request.
+ * @body    { action: 'approve' | 'reject', customCredential? }
+ * @access  admin | superadmin
+ */
+router.post('/reset-requests/:id/resolve', resolveResetRequest);
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const PasswordResetRequest = require('../models/PasswordResetRequest');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '7d';
@@ -302,5 +303,139 @@ async function updatePushToken(req, res) {
   }
 }
 
-module.exports = { signup, loginTeacherStudent, loginAdmin, getMe, updatePushToken };
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/auth/profile
+// Update currently authenticated user's profile details.
+// Protected by JWT middleware in routes.
+// ─────────────────────────────────────────────────────────────────────────────
+async function updateProfile(req, res) {
+  try {
+    const { name, phone } = req.body;
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required and must be a string.' });
+    }
+
+    const updateFields = { name: name.trim() };
+    if (phone !== undefined) {
+      updateFields.phone = phone ? phone.trim() : null;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(req.user.id, updateFields, { new: true });
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    return res.status(200).json({
+      message: 'Profile updated successfully.',
+      user: {
+        id: updatedUser._id,
+        name: updatedUser.name,
+        phone: updatedUser.phone,
+        email: updatedUser.email,
+        role: updatedUser.role,
+      },
+    });
+  } catch (err) {
+    console.error('[AUTH] updateProfile error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/auth/change-password
+// Allows user to update their password (admins) or PIN (teachers/students).
+// Protected by JWT middleware in routes.
+// ─────────────────────────────────────────────────────────────────────────────
+async function changePassword(req, res) {
+  try {
+    const { oldCredential, newCredential } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const isPin = ['teacher', 'student'].includes(user.role);
+
+    if (isPin) {
+      const pinMatch = await user.comparePin(oldCredential);
+      if (!pinMatch) {
+        return res.status(400).json({ error: 'Incorrect current PIN.' });
+      }
+      if (!newCredential || String(newCredential).length !== 6 || isNaN(newCredential)) {
+        return res.status(400).json({ error: 'New PIN must be a 6-digit number.' });
+      }
+      user.pin = String(newCredential);
+    } else {
+      const passwordMatch = await user.comparePassword(oldCredential);
+      if (!passwordMatch) {
+        return res.status(400).json({ error: 'Incorrect current password.' });
+      }
+      if (!newCredential || String(newCredential).length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+      }
+      user.password = String(newCredential);
+    }
+
+    await user.save();
+
+    return res.status(200).json({ message: `${isPin ? 'PIN' : 'Password'} changed successfully.` });
+  } catch (err) {
+    console.error('[AUTH] changePassword error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/auth/forgot-request
+// Public endpoint. Takes email (for admins/superadmins) or phone (for teachers/students)
+// ─────────────────────────────────────────────────────────────────────────────
+async function createForgotRequest(req, res) {
+  try {
+    const { email, phone } = req.body;
+
+    let user;
+    let type;
+
+    if (email) {
+      user = await User.findOne({ email: email.trim().toLowerCase() });
+      type = 'password';
+    } else if (phone) {
+      user = await User.findOne({ phone: phone.trim() });
+      type = 'pin';
+    } else {
+      return res.status(400).json({ error: 'Email or phone number is required.' });
+    }
+
+    if (!user) {
+      return res.status(200).json({ message: 'If an account exists, a reset request has been sent to the Admin.' });
+    }
+
+    const existing = await PasswordResetRequest.findOne({ user: user._id, status: 'pending' });
+    if (existing) {
+      return res.status(200).json({ message: 'A reset request is already pending approval by the Admin.' });
+    }
+
+    await PasswordResetRequest.create({
+      user: user._id,
+      type,
+    });
+
+    return res.status(200).json({ message: 'Reset request successfully sent to the Admin.' });
+  } catch (err) {
+    console.error('[AUTH] createForgotRequest error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+module.exports = {
+  signup,
+  loginTeacherStudent,
+  loginAdmin,
+  getMe,
+  updatePushToken,
+  updateProfile,
+  changePassword,
+  createForgotRequest
+};
 

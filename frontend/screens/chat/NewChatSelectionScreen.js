@@ -9,6 +9,7 @@ import {
   StatusBar,
   TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 import { COLORS, SPACING, RADIUS } from '../../theme';
@@ -131,8 +132,9 @@ export default function NewChatSelectionScreen({ navigation }) {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>✕ Cancel</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Ionicons name="close" size={18} color={COLORS.textSecondary} />
+          <Text style={styles.backText}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New Chat</Text>
         <View style={{ width: 60 }} />

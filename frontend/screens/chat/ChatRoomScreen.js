@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   StyleSheet,
   Text,
@@ -12,6 +13,8 @@ import {
   Alert,
   StatusBar,
   Modal,
+  Animated,
+  LayoutAnimation,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -33,6 +36,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [animatingDeleteIds, setAnimatingDeleteIds] = useState(new Set());
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -53,6 +58,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
 
   const typingTimeoutRef = useRef(null);
   const socketRef = useRef(null);
+  const flatListRef = useRef(null);
 
   const handleSearch = async (text) => {
     setSearchQuery(text);
@@ -127,6 +133,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
 
     const onMessageReceived = (newMsg) => {
       if (newMsg.conversation === conversationId) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setMessages((prev) => {
           const now = new Date(newMsg.createdAt).getTime();
           const isDuplicate = prev.some(
@@ -136,7 +143,6 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
               Math.abs(new Date(m.createdAt).getTime() - now) < 2000
           );
           if (isDuplicate) {
-            // Replace the optimistic message (which has a numeric timestamp _id) with the real server message.
             // This ensures subsequent operations like reporting utilize the correct database ID.
             return prev.map((m) =>
               String(m.sender?._id) === String(newMsg.sender?._id) &&
@@ -180,21 +186,35 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
 
     const onMessageDeleted = (deletedInfo) => {
       if (deletedInfo.conversation === conversationId) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m._id === deletedInfo._id
-              ? {
-                  ...m,
-                  isDeleted: true,
-                  content: null,
-                  fileUrl: null,
-                  fileName: null,
-                  fileMimeType: null,
-                  fileSizeBytes: null,
-                }
-              : m
-          )
-        );
+        setAnimatingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.add(deletedInfo._id);
+          return next;
+        });
+
+        setTimeout(() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m._id === deletedInfo._id
+                ? {
+                    ...m,
+                    isDeleted: true,
+                    content: null,
+                    fileUrl: null,
+                    fileName: null,
+                    fileMimeType: null,
+                    fileSizeBytes: null,
+                  }
+                : m
+            )
+          );
+          setAnimatingDeleteIds((prev) => {
+            const next = new Set(prev);
+            next.delete(deletedInfo._id);
+            return next;
+          });
+        }, 250);
       }
     };
 
@@ -304,21 +324,36 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
   };
 
   const executeDeleteMsg = async (msgId) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m._id === msgId
-          ? {
-              ...m,
-              isDeleted: true,
-              content: null,
-              fileUrl: null,
-              fileName: null,
-              fileMimeType: null,
-              fileSizeBytes: null,
-            }
-          : m
-      )
-    );
+    setAnimatingDeleteIds((prev) => {
+      const next = new Set(prev);
+      next.add(msgId);
+      return next;
+    });
+
+    setTimeout(() => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === msgId
+            ? {
+                ...m,
+                isDeleted: true,
+                content: null,
+                fileUrl: null,
+                fileName: null,
+                fileMimeType: null,
+                fileSizeBytes: null,
+              }
+            : m
+        )
+      );
+      setAnimatingDeleteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(msgId);
+        return next;
+      });
+    }, 250);
+
     try {
       await api.delete(`/chat/messages/${msgId}`);
     } catch (err) {
@@ -552,6 +587,11 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     }
   };
 
+  const handleScroll = (event) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    setShowScrollBottom(offsetY > 200);
+  };
+
   const handleTextChange = (text) => {
     setInputText(text);
 
@@ -644,38 +684,73 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     };
   };
 
+  const AnimatedBubbleWrapper = ({ children, isDeleting }) => {
+    const opacity = useRef(new Animated.Value(1)).current;
+    const scale = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+      if (isDeleting) {
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scale, {
+            toValue: 0.8,
+            duration: 200,
+            useNativeDriver: true,
+          })
+        ]).start();
+      }
+    }, [isDeleting]);
+
+    return (
+      <Animated.View style={{ opacity, transform: [{ scale }] }}>
+        {children}
+      </Animated.View>
+    );
+  };
+
   const renderBubble = ({ item }) => {
     const isSelf = item.sender?._id === user?._id;
     const formattedTime = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const isDeleting = animatingDeleteIds.has(item._id);
 
     if (item.isDeleted) {
       return (
-        <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft]}>
-          {isGroup && !isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
-          <View style={[styles.bubble, styles.bubbleDeleted]}>
-            <Text style={styles.textDeleted}>This message was deleted</Text>
-            <View style={styles.bubbleFooter}>
-              <Text style={[styles.bubbleTime, { color: '#64748b' }]}>{formattedTime}</Text>
+        <AnimatedBubbleWrapper isDeleting={isDeleting}>
+          <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft]}>
+            {isGroup && !isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
+            <View style={[styles.bubble, styles.bubbleDeleted]}>
+              <Text style={styles.textDeleted}>This message was deleted</Text>
+              <View style={styles.bubbleFooter}>
+                <Text style={[styles.bubbleTime, { color: '#64748b' }]}>{formattedTime}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </AnimatedBubbleWrapper>
       );
     }
 
     return (
-      <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft]}>
-        {isGroup && !isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            {...getMessagePressProps(item)}
-            style={{ flexShrink: 1 }}
-          >
-            <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther]}>
+      <AnimatedBubbleWrapper isDeleting={isDeleting}>
+        <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft]}>
+          {isGroup && !isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              {...getMessagePressProps(item)}
+              style={{ flexShrink: 1 }}
+            >
+              <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther]}>
             {item.forwardedFrom && (
-              <Text style={[styles.forwardedIndicator, isSelf ? styles.timeSelf : styles.timeOther]}>
-                ↪️ Forwarded
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                <Ionicons name="share-social-outline" size={10} color={isSelf ? 'rgba(255, 255, 255, 0.7)' : '#64748b'} />
+                <Text style={[styles.forwardedIndicator, isSelf ? styles.timeSelf : styles.timeOther, { marginBottom: 0 }]}>
+                  Forwarded
+                </Text>
+              </View>
             )}
 
             {item.replyTo && (
@@ -744,12 +819,12 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
                 const isRead = item.readBy && item.readBy.some((r) => String(r.user) !== String(user?._id));
                 const isDelivered = item.deliveredTo && item.deliveredTo.some((d) => String(d.user) !== String(user?._id));
                 if (isRead) {
-                  return <Text style={[styles.bubbleTime, { color: '#2563eb' }]}> ✔✔</Text>;
+                  return <Ionicons name="checkmark-done" size={13} color="#38bdf8" style={{ marginLeft: 3 }} />;
                 }
                 if (isDelivered) {
-                  return <Text style={[styles.bubbleTime, isSelf ? styles.timeSelf : styles.timeOther]}> ✔✔</Text>;
+                  return <Ionicons name="checkmark-done" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginLeft: 3 }} />;
                 }
-                return <Text style={[styles.bubbleTime, isSelf ? styles.timeSelf : styles.timeOther]}> ✔</Text>;
+                return <Ionicons name="checkmark" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginLeft: 3 }} />;
               })()}
             </View>
           </View>
@@ -762,6 +837,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         </TouchableOpacity>
         </View>
       </View>
+      </AnimatedBubbleWrapper>
     );
   };
 
@@ -775,7 +851,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       <View style={styles.header}>
         {!isInline && (
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 8 }}>
-            <Text style={[styles.backText, { fontSize: 24, fontWeight: '300' }]}>‹</Text>
+            <Ionicons name="arrow-back" size={24} color="#2563eb" />
           </TouchableOpacity>
         )}
         
@@ -796,7 +872,10 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
               {title}
             </Text>
             {isGroup ? (
-              <Text style={styles.headerSubText}>Tap for Info ℹ</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                <Ionicons name="information-circle-outline" size={13} color="#64748b" />
+                <Text style={styles.headerSubText}>Tap for Info</Text>
+              </View>
             ) : (
               <Text style={styles.headerSubText}>
                 {!!onlineUsers[conversation?.participants?.find(p => p._id !== user?._id)?._id] ? 'Online' : 'Offline'}
@@ -806,7 +885,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={toggleSearchBar} style={{ padding: 8 }}>
-          <Text style={{ fontSize: 18, color: '#2563eb' }}>🔍</Text>
+          <Ionicons name="search" size={20} color="#2563eb" />
         </TouchableOpacity>
       </View>
 
@@ -821,7 +900,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
             autoFocus
           />
           <TouchableOpacity onPress={toggleSearchBar} style={{ padding: 8 }}>
-            <Text style={{ color: '#ef4444', fontWeight: '700' }}>✕</Text>
+            <Ionicons name="close" size={20} color="#ef4444" />
           </TouchableOpacity>
         </View>
       )}
@@ -832,6 +911,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={searchBarVisible && searchResults !== null ? searchResults : messages}
           keyExtractor={(item) => item._id}
           renderItem={renderBubble}
@@ -840,6 +920,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
           onEndReachedThreshold={0.2}
           ListFooterComponent={loadingOlder ? <ActivityIndicator color="#38bdf8" style={{ marginVertical: 10 }} /> : null}
           contentContainerStyle={styles.listContent}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         />
       )}
 
@@ -861,7 +943,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
             </Text>
           </View>
           <TouchableOpacity onPress={() => setReplyingTo(null)}>
-            <Text style={styles.previewClose}>✕</Text>
+            <Ionicons name="close" size={18} color="#64748b" />
           </TouchableOpacity>
         </View>
       )}
@@ -876,7 +958,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
             </Text>
           </View>
           <TouchableOpacity onPress={() => { setEditingMessage(null); setInputText(''); }}>
-            <Text style={styles.previewClose}>✕</Text>
+            <Ionicons name="close" size={18} color="#64748b" />
           </TouchableOpacity>
         </View>
       )}
@@ -884,10 +966,10 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       {/* Input Bar */}
       <View style={styles.inputBar}>
         <TouchableOpacity style={styles.emojiBtn} onPress={toggleEmojiPicker}>
-          <Text style={styles.emojiBtnText}>☺</Text>
+          <Ionicons name="happy-outline" size={24} color="#94a3b8" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.emojiBtn} onPress={handleAttachmentPress}>
-          <Text style={styles.emojiBtnText}>📎</Text>
+          <Ionicons name="attach-outline" size={24} color="#94a3b8" />
         </TouchableOpacity>
         <TextInput
           style={styles.input}
@@ -996,19 +1078,20 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
             </View>
 
             <TouchableOpacity
-              style={styles.actionMenuBtn}
+              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
               onPress={() => {
                 setActionMenuVisible(false);
                 setReplyingTo(selectedActionMessage);
                 setEditingMessage(null);
               }}
             >
-              <Text style={styles.actionMenuBtnText}>Reply 💬</Text>
+              <Ionicons name="chatbubble-outline" size={18} color="#2563eb" />
+              <Text style={styles.actionMenuBtnText}>Reply</Text>
             </TouchableOpacity>
 
             {selectedActionMessage?.sender?._id === user?._id && selectedActionMessage?.type !== 'file' && (
               <TouchableOpacity
-                style={styles.actionMenuBtn}
+                style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
                 onPress={() => {
                   setActionMenuVisible(false);
                   setEditingMessage(selectedActionMessage);
@@ -1016,41 +1099,45 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
                   setReplyingTo(null);
                 }}
               >
-                <Text style={styles.actionMenuBtnText}>Edit ✏️</Text>
+                <Ionicons name="create-outline" size={18} color="#2563eb" />
+                <Text style={styles.actionMenuBtnText}>Edit</Text>
               </TouchableOpacity>
             )}
 
             {(selectedActionMessage?.sender?._id === user?._id || ['admin', 'superadmin'].includes(user?.role)) && (
               <TouchableOpacity
-                style={[styles.actionMenuBtn, { borderBottomColor: 'rgba(239,68,68,0.2)' }]}
+                style={[styles.actionMenuBtn, { borderBottomColor: 'rgba(239,68,68,0.2)', flexDirection: 'row', alignItems: 'center', gap: 10 }]}
                 onPress={() => {
                   setActionMenuVisible(false);
                   confirmDelete(selectedActionMessage._id);
                 }}
               >
-                <Text style={[styles.actionMenuBtnText, { color: '#ef4444' }]}>Delete 🗑️</Text>
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                <Text style={[styles.actionMenuBtnText, { color: '#ef4444' }]}>Delete</Text>
               </TouchableOpacity>
             )}
 
             <TouchableOpacity
-              style={styles.actionMenuBtn}
+              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
               onPress={() => {
                 setActionMenuVisible(false);
                 handleForwardSetup(selectedActionMessage);
               }}
             >
-              <Text style={styles.actionMenuBtnText}>Forward ↪️</Text>
+              <Ionicons name="arrow-redo-outline" size={18} color="#2563eb" />
+              <Text style={styles.actionMenuBtnText}>Forward</Text>
             </TouchableOpacity>
 
             {selectedActionMessage?.sender?._id !== user?._id && (
               <TouchableOpacity
-                style={styles.actionMenuBtn}
+                style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
                 onPress={() => {
                   setActionMenuVisible(false);
                   reportMessage(selectedActionMessage._id);
                 }}
               >
-                <Text style={[styles.actionMenuBtnText, { color: '#ef4444' }]}>Report ⚠️</Text>
+                <Ionicons name="warning-outline" size={18} color="#ef4444" />
+                <Text style={[styles.actionMenuBtnText, { color: '#ef4444' }]}>Report</Text>
               </TouchableOpacity>
             )}
 
@@ -1077,23 +1164,25 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
               <Text style={[styles.modalTitle, { marginBottom: 12 }]}>Send Attachment</Text>
               
               <TouchableOpacity
-                style={styles.actionMenuBtn}
+                style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
                 onPress={() => {
                   setAttachmentMenuVisible(false);
                   pickImage();
                 }}
               >
-                <Text style={styles.actionMenuBtnText}>Image / Video 🖼️</Text>
+                <Ionicons name="image-outline" size={18} color="#2563eb" />
+                <Text style={styles.actionMenuBtnText}>Image / Video</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.actionMenuBtn}
+                style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
                 onPress={() => {
                   setAttachmentMenuVisible(false);
                   pickDocument();
                 }}
               >
-                <Text style={styles.actionMenuBtnText}>Document 📄</Text>
+                <Ionicons name="document-text-outline" size={18} color="#2563eb" />
+                <Text style={styles.actionMenuBtnText}>Document</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1106,22 +1195,33 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
           </View>
         </Modal>
       )}
+
+      {/* Floating Scroll to Bottom Button */}
+      {showScrollBottom && (
+        <TouchableOpacity
+          style={styles.scrollBottomBtn}
+          activeOpacity={0.8}
+          onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        >
+          <Ionicons name="chevron-down" size={20} color="#ffffff" />
+        </TouchableOpacity>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
+  container: { flex: 1, backgroundColor: '#0e1621' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: '#17212b',
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#101921',
   },
   backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
   headerTitle: { fontSize: 17, fontWeight: '800', color: '#f1f5f9', flex: 1, textAlign: 'center', marginHorizontal: 8 },
@@ -1131,9 +1231,21 @@ const styles = StyleSheet.create({
   bubbleLeft: { alignSelf: 'flex-start' },
   bubbleRight: { alignSelf: 'flex-end' },
   senderName: { fontSize: 11, color: '#64748b', marginBottom: 2, marginLeft: 4 },
-  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, position: 'relative' },
-  bubbleSelf: { backgroundColor: '#2563eb' },
-  bubbleOther: { backgroundColor: '#1e293b' },
+  bubble: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8, position: 'relative' },
+  bubbleSelf: {
+    backgroundColor: '#2b5278',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 4,
+  },
+  bubbleOther: {
+    backgroundColor: '#182533',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 16,
+  },
   bubbleText: { fontSize: 15 },
   textSelf: { color: '#ffffff' },
   textOther: { color: '#f1f5f9' },
@@ -1141,10 +1253,21 @@ const styles = StyleSheet.create({
   timeSelf: { color: 'rgba(255, 255, 255, 0.7)' },
   timeOther: { color: '#64748b' },
   typingIndicator: { fontSize: 12, fontStyle: 'italic', color: '#64748b', paddingHorizontal: 16, paddingVertical: 4 },
-  inputBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#111827', borderTopWidth: 1, borderTopColor: '#1e293b' },
+  inputBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#17212b', borderTopWidth: 1, borderTopColor: '#101921' },
   emojiBtn: { padding: 6, marginRight: 8 },
   emojiBtnText: { fontSize: 22, color: '#94a3b8' },
-  input: { flex: 1, backgroundColor: '#0a0e1a', borderRadius: 20, borderWidth: 1, borderColor: '#1e293b', paddingHorizontal: 16, paddingVertical: 8, color: '#f1f5f9', fontSize: 15, maxHeight: 100 },
+  input: {
+    flex: 1,
+    backgroundColor: '#182533',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#24303f',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    color: '#f1f5f9',
+    fontSize: 15,
+    maxHeight: 100,
+  },
   sendBtn: { marginLeft: 10, backgroundColor: '#2563eb', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
   sendBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 14 },
   emojiPicker: { backgroundColor: '#111827', borderTopWidth: 1, borderTopColor: '#1e293b', padding: 8 },
@@ -1280,5 +1403,22 @@ const styles = StyleSheet.create({
     color: '#f1f5f9',
     fontSize: 14,
     marginRight: 8,
+  },
+  scrollBottomBtn: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2563eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
   },
 });

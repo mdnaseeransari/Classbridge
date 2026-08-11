@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const AdminLog = require('../models/AdminLog');
+const PasswordResetRequest = require('../models/PasswordResetRequest');
 const { sendExpoPushNotifications } = require('../utils/pushNotifications');
 
 // ─── Helper: build a snapshot of the target user for the audit log ────────────
@@ -887,6 +888,91 @@ async function actionReport(req, res) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/reset-requests
+// List all pending password/PIN reset requests.
+// ─────────────────────────────────────────────────────────────────────────────
+async function listResetRequests(req, res) {
+  try {
+    const requests = await PasswordResetRequest.find({ status: 'pending' })
+      .populate('user', 'name email phone role status')
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({ requests });
+  } catch (err) {
+    console.error('[ADMIN] listResetRequests error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/reset-requests/:id/resolve
+// Approve or reject a password/PIN reset request.
+// ─────────────────────────────────────────────────────────────────────────────
+async function resolveResetRequest(req, res) {
+  try {
+    const { action, customCredential } = req.body;
+    const request = await PasswordResetRequest.findById(req.params.id).populate('user');
+    if (!request) {
+      return res.status(404).json({ error: 'Reset request not found.' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Request is already resolved.' });
+    }
+
+    if (action === 'reject') {
+      request.status = 'rejected';
+      request.resolvedBy = req.user.id;
+      request.resolvedAt = new Date();
+      await request.save();
+      return res.status(200).json({ message: 'Reset request rejected.', request });
+    }
+
+    if (action !== 'approve') {
+      return res.status(400).json({ error: 'Invalid action.' });
+    }
+
+    const targetUser = request.user;
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Associated user not found.' });
+    }
+
+    let generatedCred = '';
+    if (request.type === 'pin') {
+      generatedCred = customCredential || String(Math.floor(100000 + Math.random() * 900000));
+      targetUser.pin = generatedCred;
+    } else {
+      generatedCred = customCredential || Math.random().toString(36).slice(-8);
+      targetUser.password = generatedCred;
+    }
+
+    await targetUser.save();
+
+    request.status = 'resolved';
+    request.tempCredential = generatedCred;
+    request.resolvedBy = req.user.id;
+    request.resolvedAt = new Date();
+    await request.save();
+
+    await writeLog({
+      action: 'password_reset_approved',
+      performedBy: req.user.id,
+      targetUser: targetUser,
+      note: `Approved reset request. Temporary credential generated: ${generatedCred}`,
+    });
+
+    return res.status(200).json({
+      message: 'Reset request approved successfully.',
+      tempCredential: generatedCred,
+      request,
+    });
+  } catch (err) {
+    console.error('[ADMIN] resolveResetRequest error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -904,5 +990,7 @@ module.exports = {
   listReports,
   getReportDetail,
   actionReport,
+  listResetRequests,
+  resolveResetRequest,
 };
 
