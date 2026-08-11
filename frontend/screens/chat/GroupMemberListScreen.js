@@ -9,6 +9,7 @@ import {
   StatusBar,
 } from 'react-native';
 import api from '../../services/api';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function GroupMemberListScreen({ route, navigation }) {
   const { conversationId, groupName } = route.params;
@@ -48,7 +49,7 @@ export default function GroupMemberListScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>‹ Back</Text>
@@ -59,7 +60,7 @@ export default function GroupMemberListScreen({ route, navigation }) {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38bdf8" />
+          <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       ) : error ? (
         <View style={styles.center}>
@@ -78,33 +79,33 @@ export default function GroupMemberListScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#38bdf8', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc', flex: 1, textAlign: 'center', marginHorizontal: 8 },
+  backText: { color: COLORS.accent, fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, flex: 1, textAlign: 'center', marginHorizontal: 8 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: '#ef4444', textAlign: 'center' },
+  errorText: { color: COLORS.danger, textAlign: 'center' },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: COLORS.cardBorder,
   },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#8b5cf622', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#8b5cf6', fontSize: 15, fontWeight: '800' },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(37, 99, 235, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: COLORS.accent, fontSize: 15, fontWeight: '800' },
   details: { marginLeft: 12 },
-  name: { fontSize: 15, fontWeight: '700', color: '#f8fafc' },
-  role: { fontSize: 11, fontWeight: '600', color: '#64748b', marginTop: 2 },
+  name: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  role: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, marginTop: 2 },
 });

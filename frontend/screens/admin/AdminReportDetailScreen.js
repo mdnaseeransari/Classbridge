@@ -9,8 +9,10 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import api from '../../services/api';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function AdminReportDetailScreen({ route, navigation }) {
   const { reportId } = route.params;
@@ -37,7 +39,31 @@ export default function AdminReportDetailScreen({ route, navigation }) {
     fetchReportDetails();
   }, [reportId]);
 
-  const handleAction = async (action) => {
+  const executeAction = async (action) => {
+    setSubmitting(true);
+    try {
+      await api.patch(`/admin/reports/${reportId}/action`, {
+        action,
+        adminNotes: adminNotes.trim() || undefined,
+      });
+      if (Platform.OS === 'web') {
+        alert('Report processed successfully.');
+      } else {
+        Alert.alert('Success', `Report processed successfully.`);
+      }
+      navigation.goBack();
+    } catch (err) {
+      if (Platform.OS === 'web') {
+        alert(err?.response?.data?.error || 'Failed to action report.');
+      } else {
+        Alert.alert('Error', err?.response?.data?.error || 'Failed to action report.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAction = (action) => {
     const actionLabels = {
       dismiss: 'dismiss',
       delete_message: 'delete reported message',
@@ -45,40 +71,32 @@ export default function AdminReportDetailScreen({ route, navigation }) {
       resolve: 'mark as resolved',
     };
 
-    Alert.confirm
-      ? Alert.confirm(`Are you sure you want to ${actionLabels[action]}?`)
-      : Alert.alert(
-          'Confirm Action',
-          `Are you sure you want to ${actionLabels[action]}?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Confirm',
-              style: action === 'dismiss' ? 'default' : 'destructive',
-              onPress: async () => {
-                setSubmitting(true);
-                try {
-                  await api.patch(`/admin/reports/${reportId}/action`, {
-                    action,
-                    adminNotes: adminNotes.trim() || undefined,
-                  });
-                  Alert.alert('Success', `Report processed successfully.`);
-                  navigation.goBack();
-                } catch (err) {
-                  Alert.alert('Error', err?.response?.data?.error || 'Failed to action report.');
-                } finally {
-                  setSubmitting(false);
-                }
-              },
-            },
-          ]
-        );
+    if (Platform.OS === 'web') {
+      const confirmAction = window.confirm(`Are you sure you want to ${actionLabels[action]}?`);
+      if (confirmAction) {
+        executeAction(action);
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Confirm Action',
+      `Are you sure you want to ${actionLabels[action]}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          style: action === 'dismiss' ? 'default' : 'destructive',
+          onPress: () => executeAction(action),
+        },
+      ]
+    );
   };
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#38bdf8" />
+        <ActivityIndicator size="large" color={COLORS.accent} />
       </View>
     );
   }
@@ -95,7 +113,7 @@ export default function AdminReportDetailScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -112,7 +130,7 @@ export default function AdminReportDetailScreen({ route, navigation }) {
           <Text style={styles.sectionTitle}>Report Info</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Status:</Text>
-            <Text style={[styles.infoValue, { color: report.status === 'pending' ? '#fbbf24' : '#22c55e' }]}>
+            <Text style={[styles.infoValue, { color: report.status === 'pending' ? '#fbbf24' : '#10b981' }]}>
               {report.status.toUpperCase()}
             </Text>
           </View>
@@ -132,7 +150,7 @@ export default function AdminReportDetailScreen({ route, navigation }) {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Reported User:</Text>
-            <Text style={[styles.infoValue, { color: '#ef4444' }]}>
+            <Text style={[styles.infoValue, { color: COLORS.danger }]}>
               {report.reportedUser?.name} ({report.reportedUser?.role})
             </Text>
           </View>
@@ -195,14 +213,14 @@ export default function AdminReportDetailScreen({ route, navigation }) {
             <TextInput
               style={styles.notesInput}
               placeholder="e.g. Verified harassment, taking moderation action..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor={COLORS.textSecondary}
               value={adminNotes}
               onChangeText={setAdminNotes}
               multiline
             />
 
             {submitting ? (
-              <ActivityIndicator color="#38bdf8" style={{ marginTop: 20 }} />
+              <ActivityIndicator color={COLORS.accent} style={{ marginTop: 20 }} />
             ) : (
               <View style={styles.btnCol}>
                 <TouchableOpacity style={[styles.btn, styles.resolveBtn]} onPress={() => handleAction('resolve')}>
@@ -212,11 +230,11 @@ export default function AdminReportDetailScreen({ route, navigation }) {
                   <Text style={styles.btnText}>Dismiss Report</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.btn, styles.deleteBtn]} onPress={() => handleAction('delete_message')}>
-                  <Text style={[styles.btnText, { color: '#ef4444' }]}>Delete Reported Message</Text>
+                  <Text style={[styles.btnText, { color: COLORS.danger }]}>Delete Reported Message</Text>
                 </TouchableOpacity>
                 {report.reportedUser && !report.reportedUser.isBanned && (
                   <TouchableOpacity style={[styles.btn, styles.banBtn]} onPress={() => handleAction('ban_user')}>
-                    <Text style={[styles.btnText, { color: '#ef4444' }]}>Ban User & Delete Message</Text>
+                    <Text style={[styles.btnText, { color: COLORS.danger }]}>Ban User & Delete Message</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -229,45 +247,45 @@ export default function AdminReportDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#38bdf8', fontSize: 15, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc', flex: 1, textAlign: 'center' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  errorText: { color: '#ef4444', fontSize: 16 },
+  backText: { color: COLORS.accent, fontSize: 15, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, flex: 1, textAlign: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg },
+  errorText: { color: COLORS.danger, fontSize: 16 },
   body: { padding: 12, paddingBottom: 40 },
-  card: { backgroundColor: '#1e293b', borderRadius: 10, padding: 16, borderLeftWidth: 4, borderLeftColor: '#38bdf8', marginBottom: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '800', color: '#f8fafc', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5 },
+  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.card, padding: 16, borderLeftWidth: 4, borderLeftColor: COLORS.accent, marginBottom: 16, borderWidth: 1, borderColor: COLORS.cardBorder },
+  sectionTitle: { fontSize: 14, fontWeight: '800', color: COLORS.textPrimary, textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4 },
-  infoLabel: { color: '#64748b', fontSize: 13 },
-  infoValue: { color: '#f8fafc', fontSize: 13, fontWeight: '600', maxWidth: '65%', textAlign: 'right' },
+  infoLabel: { color: COLORS.textSecondary, fontSize: 13 },
+  infoValue: { color: COLORS.textPrimary, fontSize: 13, fontWeight: '600', maxWidth: '65%', textAlign: 'right' },
   contextContainer: { marginBottom: 16 },
-  chatContext: { backgroundColor: '#1e293b', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#334155' },
+  chatContext: { backgroundColor: COLORS.surface, borderRadius: RADIUS.card, padding: 12, borderWidth: 1, borderColor: COLORS.cardBorder },
   msgBubble: { padding: 10, borderRadius: 8, marginVertical: 6 },
-  normalMsgBubble: { backgroundColor: '#0f172a' },
-  reportedMsgBubble: { backgroundColor: 'rgba(239,68,68,0.15)', borderWidth: 1, borderColor: '#ef4444' },
-  msgSender: { fontSize: 11, fontWeight: '700', color: '#94a3b8', marginBottom: 2 },
-  msgContent: { fontSize: 14, color: '#f8fafc' },
-  msgTime: { fontSize: 9, color: '#64748b', alignSelf: 'flex-end', marginTop: 4 },
-  emptyText: { color: '#64748b', fontSize: 14, fontStyle: 'italic' },
-  actionCard: { backgroundColor: '#1e293b', borderRadius: 10, padding: 16, borderLeftWidth: 4, borderLeftColor: '#fbbf24' },
-  label: { fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: '600' },
-  notesInput: { backgroundColor: '#0f172a', borderRadius: 8, borderWidth: 1, borderColor: '#334155', padding: 12, color: '#f8fafc', fontSize: 14, minHeight: 70, textAlignVertical: 'top' },
+  normalMsgBubble: { backgroundColor: COLORS.bg },
+  reportedMsgBubble: { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: COLORS.danger },
+  msgSender: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 2 },
+  msgContent: { fontSize: 14, color: COLORS.textPrimary },
+  msgTime: { fontSize: 9, color: COLORS.textSecondary, alignSelf: 'flex-end', marginTop: 4 },
+  emptyText: { color: COLORS.textSecondary, fontSize: 14, fontStyle: 'italic' },
+  actionCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.card, padding: 16, borderLeftWidth: 4, borderLeftColor: '#fbbf24', borderWidth: 1, borderColor: COLORS.cardBorder },
+  label: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 6, fontWeight: '600' },
+  notesInput: { backgroundColor: COLORS.bg, borderRadius: RADIUS.button, borderWidth: 1, borderColor: COLORS.cardBorder, padding: 12, color: COLORS.textPrimary, fontSize: 14, minHeight: 70, textAlignVertical: 'top' },
   btnCol: { gap: 10, marginTop: 16 },
-  btn: { paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  btnText: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
-  resolveBtn: { backgroundColor: '#38bdf8' },
-  dismissBtn: { backgroundColor: '#94a3b8' },
-  deleteBtn: { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#ef4444' },
-  banBtn: { backgroundColor: 'rgba(239, 68, 68, 0.25)', borderWidth: 1, borderColor: '#ef4444' },
+  btn: { paddingVertical: 12, borderRadius: RADIUS.button, alignItems: 'center', justifyContent: 'center' },
+  btnText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  resolveBtn: { backgroundColor: COLORS.accent },
+  dismissBtn: { backgroundColor: COLORS.textSecondary },
+  deleteBtn: { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: COLORS.danger },
+  banBtn: { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderWidth: 1, borderColor: COLORS.danger },
 });

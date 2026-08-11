@@ -312,7 +312,28 @@ async function deleteUser(req, res) {
     // Write log BEFORE deleting so targetUser ObjectId is still valid
     await writeLog({ action: 'deleted', performedBy: req.user.id, targetUser: user, note: req.body.note });
 
-    await User.findByIdAndDelete(req.params.id);
+    const userId = req.params.id;
+
+    // Find conversations the user was in
+    const userConvos = await Conversation.find({ participants: userId });
+    for (const convo of userConvos) {
+      if (convo.type === 'direct') {
+        // Hard-delete direct message conversations and all their messages
+        await Conversation.findByIdAndDelete(convo._id);
+        await Message.deleteMany({ conversation: convo._id });
+      } else if (convo.type === 'group') {
+        // Cleanly remove user from group participants list
+        convo.participants = convo.participants.filter((p) => p.toString() !== userId);
+        if (convo.participants.length === 0) {
+          await Conversation.findByIdAndDelete(convo._id);
+          await Message.deleteMany({ conversation: convo._id });
+        } else {
+          await convo.save();
+        }
+      }
+    }
+
+    await User.findByIdAndDelete(userId);
 
     return res.status(200).json({ message: 'User deleted successfully.' });
   } catch (err) {

@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -22,8 +22,6 @@ import UserDetailScreen from '../screens/admin/UserDetailScreen';
 import AdminLogsScreen from '../screens/admin/AdminLogsScreen';
 import CreateAdminScreen from '../screens/admin/CreateAdminScreen';
 import PromoteToAdminScreen from '../screens/admin/PromoteToAdminScreen';
-import AdminChatMonitoringScreen from '../screens/admin/AdminChatMonitoringScreen';
-import AdminChatMonitoringRoomScreen from '../screens/admin/AdminChatMonitoringRoomScreen';
 import AdminReportsScreen from '../screens/admin/AdminReportsScreen';
 import AdminReportDetailScreen from '../screens/admin/AdminReportDetailScreen';
 
@@ -75,13 +73,25 @@ function UserTabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#1e293b', borderTopColor: '#334155' },
-        tabBarActiveTintColor: '#38bdf8',
+        tabBarStyle: { backgroundColor: '#111827', borderTopColor: '#1e293b', height: 60, paddingBottom: 8, paddingTop: 6 },
+        tabBarActiveTintColor: '#2563eb',
         tabBarInactiveTintColor: '#64748b',
       }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Chat" component={ChatInboxScreen} />
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🏠</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="Chat"
+        component={ChatInboxScreen}
+        options={{
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💬</Text>,
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -92,13 +102,27 @@ function AdminTabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#1e293b', borderTopColor: '#334155' },
-        tabBarActiveTintColor: '#38bdf8',
+        tabBarStyle: { backgroundColor: '#111827', borderTopColor: '#1e293b', height: 60, paddingBottom: 8, paddingTop: 6 },
+        tabBarActiveTintColor: '#2563eb',
         tabBarInactiveTintColor: '#64748b',
       }}
     >
-      <Tab.Screen name="AdminDashboard" component={AdminDashboardScreen} options={{ tabBarLabel: 'Dashboard' }} />
-      <Tab.Screen name="Chat" component={ChatInboxScreen} options={{ tabBarLabel: 'Chat' }} />
+      <Tab.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={{
+          tabBarLabel: 'Dashboard',
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🛡️</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="Chat"
+        component={ChatInboxScreen}
+        options={{
+          tabBarLabel: 'Chat',
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>💬</Text>,
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -124,8 +148,6 @@ function AdminStackNavigator() {
       <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
       <Stack.Screen name="GroupMemberList" component={GroupMemberListScreen} />
       <Stack.Screen name="JoinGroup" component={JoinGroupScreen} />
-      <Stack.Screen name="AdminChatMonitoring" component={AdminChatMonitoringScreen} />
-      <Stack.Screen name="AdminChatMonitoringRoom" component={AdminChatMonitoringRoomScreen} />
       <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
       <Stack.Screen name="AdminReportDetail" component={AdminReportDetailScreen} />
     </Stack.Navigator>

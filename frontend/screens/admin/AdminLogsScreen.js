@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as adminApi from '../../services/adminApi';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function AdminLogsScreen({ navigation }) {
   const [logs, setLogs] = useState([]);
@@ -62,7 +63,7 @@ export default function AdminLogsScreen({ navigation }) {
   };
 
   const renderFooter = () => {
-    if (loadingMore) return <ActivityIndicator color="#38bdf8" style={{ marginVertical: 16 }} />;
+    if (loadingMore) return <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} />;
     if (page < totalPages) {
       return (
         <TouchableOpacity style={styles.loadMore} onPress={handleLoadMore}>
@@ -106,7 +107,7 @@ export default function AdminLogsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>‹ Back</Text>
@@ -123,7 +124,7 @@ export default function AdminLogsScreen({ navigation }) {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#a78bfa" />
+          <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       ) : (
         <FlatList
@@ -131,7 +132,7 @@ export default function AdminLogsScreen({ navigation }) {
           keyExtractor={(item) => item._id}
           renderItem={renderLogItem}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#a78bfa" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.accent} />
           }
           ListEmptyComponent={
             <View style={styles.center}>
@@ -147,61 +148,61 @@ export default function AdminLogsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#38bdf8', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
+  backText: { color: COLORS.accent, fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 60 },
   errorBox: {
     margin: 16,
-    backgroundColor: 'rgba(239,68,68,0.12)',
-    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: COLORS.danger,
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
   },
-  errorText: { color: '#f87171', textAlign: 'center', fontSize: 13 },
-  emptyText: { color: '#64748b', fontSize: 15 },
+  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 13 },
+  emptyText: { color: COLORS.textSecondary, fontSize: 15 },
   logCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.card,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
   },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  logAction: { fontSize: 12, fontWeight: '800', color: '#a78bfa' },
-  logTime: { fontSize: 11, color: '#64748b' },
-  logText: { fontSize: 13, color: '#e2e8f0', marginTop: 3 },
-  bold: { fontWeight: '700', color: '#94a3b8' },
+  logAction: { fontSize: 12, fontWeight: '800', color: COLORS.accent },
+  logTime: { fontSize: 11, color: COLORS.textSecondary },
+  logText: { fontSize: 13, color: COLORS.textPrimary, marginTop: 3 },
+  bold: { fontWeight: '700', color: COLORS.textSecondary },
   noteBox: {
     marginTop: 8,
-    backgroundColor: '#0f172a',
+    backgroundColor: COLORS.bg,
     borderRadius: 6,
     padding: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#475569',
+    borderLeftColor: COLORS.cardBorder,
   },
-  noteText: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic' },
+  noteText: { fontSize: 12, color: COLORS.textSecondary, fontStyle: 'italic' },
   loadMore: {
     margin: 16,
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.button,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
   },
-  loadMoreText: { color: '#38bdf8', fontWeight: '700', fontSize: 14 },
+  loadMoreText: { color: COLORS.accent, fontWeight: '700', fontSize: 14 },
 });

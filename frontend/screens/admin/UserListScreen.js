@@ -17,10 +17,10 @@ const ROLES = ['all', 'teacher', 'student', 'admin'];
 const STATUSES = ['all', 'pending', 'approved', 'rejected'];
 
 const ROLE_COLORS = {
-  teacher: '#38bdf8',
-  student: '#34d399',
-  admin: '#a78bfa',
-  superadmin: '#f472b6',
+  teacher: '#10b981',
+  student: '#7c3aed',
+  admin: '#2563eb',
+  superadmin: '#2563eb',
 };
 
 const STATUS_COLORS = {
@@ -159,7 +159,7 @@ export default function UserListScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor="#0a0e1a" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -212,7 +212,7 @@ export default function UserListScreen({ navigation }) {
       {/* List */}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38bdf8" />
+          <ActivityIndicator size="large" color="#2563eb" />
         </View>
       ) : (
         <FlatList
@@ -220,7 +220,7 @@ export default function UserListScreen({ navigation }) {
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => <UserRow user={item} onPress={handleUserPress} />}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#38bdf8" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
           }
           ListEmptyComponent={
             <View style={styles.center}>
@@ -236,28 +236,28 @@ export default function UserListScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#0a0e1a' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#1e293b',
   },
   backBtn: { padding: 4 },
-  backText: { color: '#38bdf8', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
+  backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f1f5f9' },
   pendingLink: { color: '#fbbf24', fontSize: 14, fontWeight: '600' },
   filterSection: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#1e293b',
   },
   filterLabel: { fontSize: 11, color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: 8 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -265,27 +265,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0a0e1a',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1e293b',
   },
-  pillActive: { backgroundColor: '#0284c7', borderColor: '#0284c7' },
+  pillActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   pillText: { fontSize: 12, color: '#64748b', fontWeight: '600', textTransform: 'capitalize' },
   pillTextActive: { color: '#fff' },
   errorBox: {
     margin: 16,
-    backgroundColor: 'rgba(239,68,68,0.12)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderColor: '#ef4444',
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
   },
-  errorText: { color: '#f87171', textAlign: 'center', fontSize: 13 },
+  errorText: { color: '#ef4444', textAlign: 'center', fontSize: 13 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 60 },
   emptyText: { color: '#64748b', fontSize: 15 },
   row: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
     marginBottom: 10,
     padding: 14,
     flexDirection: 'row',
@@ -301,8 +303,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: { fontSize: 18, fontWeight: '800' },
-  rowName: { fontSize: 15, fontWeight: '700', color: '#f8fafc' },
-  rowPhone: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  rowName: { fontSize: 15, fontWeight: '700', color: '#f1f5f9' },
+  rowPhone: { fontSize: 12, color: '#64748b', marginTop: 2 },
   rowMeta: { fontSize: 11, color: '#64748b', marginTop: 1 },
   rowRight: { alignItems: 'flex-end', marginLeft: 8 },
   badge: {
@@ -313,12 +315,12 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
   loadMore: {
     margin: 16,
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
+    backgroundColor: '#111827',
+    borderRadius: 8,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1e293b',
   },
-  loadMoreText: { color: '#38bdf8', fontWeight: '700', fontSize: 14 },
+  loadMoreText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
 });

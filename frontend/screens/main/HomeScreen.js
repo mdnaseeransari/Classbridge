@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function HomeScreen() {
   const { user, logout } = useContext(AuthContext);
@@ -23,40 +24,42 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: COLORS.bg,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: SPACING.xl,
   },
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    padding: SPACING.xxl,
     width: '100%',
     maxWidth: 400,
     alignItems: 'center',
   },
   welcome: {
     fontSize: 16,
-    color: '#94a3b8',
+    color: COLORS.textSecondary,
   },
   name: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#38bdf8',
-    marginTop: 4,
+    color: COLORS.accent,
+    marginTop: SPACING.xs,
   },
   role: {
     fontSize: 14,
-    color: '#cbd5e1',
-    marginTop: 8,
-    marginBottom: 24,
+    color: COLORS.textPrimary,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xxl,
   },
   logoutButton: {
-    backgroundColor: '#ef4444',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+    backgroundColor: COLORS.danger,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xxl,
+    borderRadius: RADIUS.button,
   },
   logoutText: {
     color: '#ffffff',

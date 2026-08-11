@@ -72,8 +72,8 @@ export default function SignupScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerContainer}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join ClassBridge Community</Text>
+          <Text style={styles.title}>ClassBridge</Text>
+          <Text style={styles.subtitle}>Join the ClassBridge Community</Text>
         </View>
 
         {errorMsg ? (
@@ -187,12 +187,12 @@ export default function SignupScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0a0e1a',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: 20,
   },
   headerContainer: {
     alignItems: 'center',
@@ -201,15 +201,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 30,
     fontWeight: '800',
-    color: '#38bdf8',
+    color: '#2563eb',
   },
   subtitle: {
     fontSize: 15,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 4,
+    fontWeight: '500',
   },
   errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderColor: '#ef4444',
     borderWidth: 1,
     borderRadius: 8,
@@ -217,14 +218,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   errorText: {
-    color: '#f87171',
+    color: '#ef4444',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
   },
   form: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
     padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -234,10 +237,12 @@ const styles = StyleSheet.create({
   },
   roleToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#0f172a',
-    borderRadius: 10,
+    backgroundColor: '#0a0e1a',
+    borderRadius: 8,
     padding: 4,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#1e293b',
   },
   roleButton: {
     flex: 1,
@@ -246,12 +251,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   roleButtonActive: {
-    backgroundColor: '#0284c7',
+    backgroundColor: '#2563eb',
   },
   roleButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: '#64748b',
   },
   roleTextActive: {
     color: '#ffffff',
@@ -259,22 +264,22 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#cbd5e1',
+    color: '#f1f5f9',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#0f172a',
-    borderRadius: 10,
+    backgroundColor: '#0a0e1a',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: '#1e293b',
+    color: '#f1f5f9',
     padding: 14,
     fontSize: 16,
     marginBottom: 16,
   },
   button: {
-    backgroundColor: '#0284c7',
-    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 12,
@@ -292,11 +297,11 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   linkText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 14,
   },
   linkBold: {
-    color: '#38bdf8',
+    color: '#2563eb',
     fontWeight: '700',
   },
 });

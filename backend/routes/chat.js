@@ -17,9 +17,17 @@ const {
   sendFileAttachment,
   reportMessage,
   listAdmins,
+  listContacts,
   editMessage,
   deleteMessage,
   forwardMessage,
+  pinConversation,
+  unpinConversation,
+  archiveConversation,
+  unarchiveConversation,
+  muteConversation,
+  unmuteConversation,
+  searchMessages,
 } = require('../controllers/chatController');
 
 const router = express.Router();
@@ -57,11 +65,67 @@ router.get('/conversations', listConversations);
 router.get('/admins', listAdmins);
 
 /**
+ * @route   GET /api/chat/contacts
+ * @desc    List all approved, active DM-eligible contacts for the authenticated user.
+ * @access  Any approved user
+ */
+router.get('/contacts', listContacts);
+
+/**
  * @route   GET /api/chat/conversations/:id
  * @desc    Get a single conversation. Returns 403 if caller is not a participant.
  * @access  Any approved user (participant only)
  */
 router.get('/conversations/:id', getConversation);
+
+/**
+ * @route   POST /api/chat/conversations/:id/pin
+ * @desc    Pin a conversation to the top.
+ * @access  Any participant
+ */
+router.post('/conversations/:id/pin', pinConversation);
+
+/**
+ * @route   POST /api/chat/conversations/:id/unpin
+ * @desc    Unpin a conversation.
+ * @access  Any participant
+ */
+router.post('/conversations/:id/unpin', unpinConversation);
+
+/**
+ * @route   POST /api/chat/conversations/:id/archive
+ * @desc    Archive a conversation.
+ * @access  Any participant
+ */
+router.post('/conversations/:id/archive', archiveConversation);
+
+/**
+ * @route   POST /api/chat/conversations/:id/unarchive
+ * @desc    Unarchive a conversation.
+ * @access  Any participant
+ */
+router.post('/conversations/:id/unarchive', unarchiveConversation);
+
+/**
+ * @route   POST /api/chat/conversations/:id/mute
+ * @desc    Mute a conversation.
+ * @access  Any participant
+ */
+router.post('/conversations/:id/mute', muteConversation);
+
+/**
+ * @route   POST /api/chat/conversations/:id/unmute
+ * @desc    Unmute a conversation.
+ * @access  Any participant
+ */
+router.post('/conversations/:id/unmute', unmuteConversation);
+
+/**
+ * @route   GET /api/chat/conversations/:id/search
+ * @desc    Search messages in a conversation.
+ * @access  Any participant
+ */
+router.get('/conversations/:id/search', searchMessages);
 
 // ─── Group Management (Admin / Super Admin ONLY) ──────────────────────────────
 

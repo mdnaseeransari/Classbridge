@@ -10,6 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import * as adminApi from '../../services/adminApi';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function CreateAdminScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -48,7 +49,7 @@ export default function CreateAdminScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>‹ Cancel</Text>
@@ -62,7 +63,7 @@ export default function CreateAdminScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="e.g. John Doe"
-          placeholderTextColor="#475569"
+          placeholderTextColor={COLORS.textSecondary}
           value={name}
           onChangeText={setName}
         />
@@ -71,7 +72,7 @@ export default function CreateAdminScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="e.g. john@classbridge.com"
-          placeholderTextColor="#475569"
+          placeholderTextColor={COLORS.textSecondary}
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
@@ -82,7 +83,7 @@ export default function CreateAdminScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="••••••••"
-          placeholderTextColor="#475569"
+          placeholderTextColor={COLORS.textSecondary}
           secureTextEntry
           autoCapitalize="none"
           value={password}
@@ -112,47 +113,47 @@ export default function CreateAdminScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#64748b', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
+  backText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
   body: { padding: 20 },
-  label: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+  label: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
   input: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.button,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
     padding: 14,
-    color: '#f8fafc',
+    color: COLORS.textPrimary,
     fontSize: 15,
   },
   errorBox: {
     marginTop: 20,
-    backgroundColor: 'rgba(239,68,68,0.12)',
-    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: COLORS.danger,
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
   },
-  errorText: { color: '#f87171', textAlign: 'center', fontSize: 13 },
+  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 13 },
   btn: {
     marginTop: 24,
-    backgroundColor: '#f472b6',
+    backgroundColor: COLORS.accent,
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: RADIUS.button,
     alignItems: 'center',
   },
   btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  btnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
 });

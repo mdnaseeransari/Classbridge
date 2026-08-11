@@ -111,6 +111,30 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Pinned chat conversations
+    pinnedConversations: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Conversation',
+      }
+    ],
+
+    // Archived chat conversations
+    archivedConversations: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Conversation',
+      }
+    ],
+
+    // Muted chat conversations
+    mutedConversations: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Conversation',
+      }
+    ],
+
     // Tracks who approved/rejected/locked/unlocked this user and when.
     // Populated by admin action; null until an action is taken.
     actionLog: [

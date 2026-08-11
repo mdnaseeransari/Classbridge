@@ -110,12 +110,12 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0a0e1a',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: 20,
   },
   headerContainer: {
     alignItems: 'center',
@@ -124,16 +124,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: '800',
-    color: '#38bdf8',
-    letterSpacing: 1,
+    color: '#2563eb',
+    letterSpacing: 0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 6,
+    fontWeight: '500',
   },
   errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderColor: '#ef4444',
     borderWidth: 1,
     borderRadius: 8,
@@ -141,14 +142,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   errorText: {
-    color: '#f87171',
+    color: '#ef4444',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
   },
   form: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
     padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -159,22 +162,22 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#cbd5e1',
+    color: '#f1f5f9',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#0f172a',
-    borderRadius: 10,
+    backgroundColor: '#0a0e1a',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: '#1e293b',
+    color: '#f1f5f9',
     padding: 14,
     fontSize: 16,
     marginBottom: 18,
   },
   button: {
-    backgroundColor: '#0284c7',
-    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
@@ -192,11 +195,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   linkText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 14,
   },
   linkBold: {
-    color: '#38bdf8',
+    color: '#2563eb',
     fontWeight: '700',
   },
   adminLinkText: {

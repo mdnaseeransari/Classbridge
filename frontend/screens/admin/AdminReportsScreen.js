@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import api from '../../services/api';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function AdminReportsScreen({ navigation }) {
   const [reports, setReports] = useState([]);
@@ -61,7 +62,7 @@ export default function AdminReportsScreen({ navigation }) {
       case 'dismissed':
         return { bg: 'rgba(100, 116, 139, 0.15)', border: '#64748b', text: '#94a3b8' };
       default:
-        return { bg: '#1e293b', border: '#334155', text: '#94a3b8' };
+        return { bg: COLORS.surface, border: COLORS.cardBorder, text: COLORS.textSecondary };
     }
   };
 
@@ -83,7 +84,7 @@ export default function AdminReportsScreen({ navigation }) {
         </View>
 
         <Text style={styles.reason}>
-          Reason: <Text style={{ color: '#f8fafc', fontWeight: '700' }}>{getReasonLabel(item.reason)}</Text>
+          Reason: <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>{getReasonLabel(item.reason)}</Text>
         </Text>
 
         <View style={styles.reportedContentBox}>
@@ -98,7 +99,7 @@ export default function AdminReportsScreen({ navigation }) {
             Reporter: <Text style={styles.roleValue}>{item.reporter?.name || 'Unknown'}</Text>
           </Text>
           <Text style={styles.roleText}>
-            Target: <Text style={[styles.roleValue, { color: '#ef4444' }]}>{item.reportedUser?.name || 'Unknown'}</Text>
+            Target: <Text style={[styles.roleValue, { color: COLORS.danger }]}>{item.reportedUser?.name || 'Unknown'}</Text>
           </Text>
         </View>
       </TouchableOpacity>
@@ -107,7 +108,7 @@ export default function AdminReportsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -135,7 +136,7 @@ export default function AdminReportsScreen({ navigation }) {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38bdf8" />
+          <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       ) : (
         <FlatList
@@ -143,7 +144,7 @@ export default function AdminReportsScreen({ navigation }) {
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#38bdf8" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.accent} />
           }
           ListEmptyComponent={
             <View style={styles.center}>
@@ -158,23 +159,23 @@ export default function AdminReportsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#38bdf8', fontSize: 15, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
+  backText: { color: COLORS.accent, fontSize: 15, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingBottom: 8,
     paddingHorizontal: 16,
     gap: 8,
@@ -182,36 +183,36 @@ const styles = StyleSheet.create({
   tab: {
     paddingVertical: 6,
     paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: '#0f172a',
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
   },
   activeTab: {
-    backgroundColor: '#38bdf8',
-    borderColor: '#38bdf8',
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
   },
-  tabText: { color: '#94a3b8', fontSize: 11, fontWeight: '700' },
-  activeTabText: { color: '#0f172a' },
+  tabText: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700' },
+  activeTabText: { color: '#ffffff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { color: '#64748b', fontSize: 15 },
+  emptyText: { color: COLORS.textSecondary, fontSize: 15 },
   item: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.card,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   statusBadge: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   statusText: { fontSize: 10, fontWeight: '800' },
-  time: { fontSize: 11, color: '#64748b' },
-  reason: { fontSize: 13, color: '#94a3b8', marginBottom: 8 },
-  reportedContentBox: { backgroundColor: '#0f172a', borderRadius: 8, padding: 12, marginBottom: 12 },
-  reportedContentLabel: { fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: '600' },
-  reportedContent: { fontSize: 13, color: '#f8fafc', fontStyle: 'italic' },
-  rolesRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 10 },
-  roleText: { fontSize: 12, color: '#94a3b8' },
-  roleValue: { color: '#f8fafc', fontWeight: '600' },
+  time: { fontSize: 11, color: COLORS.textSecondary },
+  reason: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 8 },
+  reportedContentBox: { backgroundColor: COLORS.bg, borderRadius: 8, padding: 12, marginBottom: 12 },
+  reportedContentLabel: { fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, fontWeight: '600' },
+  reportedContent: { fontSize: 13, color: COLORS.textPrimary, fontStyle: 'italic' },
+  rolesRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: COLORS.cardBorder, paddingTop: 10 },
+  roleText: { fontSize: 12, color: COLORS.textSecondary },
+  roleValue: { color: COLORS.textPrimary, fontWeight: '600' },
 });

@@ -77,41 +77,23 @@ export default function AdminDashboardScreen({ navigation }) {
         <NavCard
           title="All Users"
           subtitle="Browse, filter, search all users"
-          color="#38bdf8"
+          color="#2563eb"
           icon="👥"
           onPress={() => navigation.navigate('UserList')}
         />
         <NavCard
           title="Pending Approvals"
           subtitle="Review and approve new sign-ups"
-          color="#fbbf24"
+          color="#2563eb"
           icon="⏳"
           onPress={() => navigation.navigate('PendingApprovals')}
         />
-
-        {/* Audit */}
-        <Text style={styles.section}>Audit & Logs</Text>
-        <NavCard
-          title="Admin Action Log"
-          subtitle="View all admin actions and history"
-          color="#a78bfa"
-          icon="📋"
-          onPress={() => navigation.navigate('AdminLogs')}
-        />
-
         {/* Monitoring & Moderation */}
         <Text style={styles.section}>Monitoring & Moderation</Text>
         <NavCard
-          title="Monitor Chats"
-          subtitle="View all direct & group chats read-only"
-          color="#38bdf8"
-          icon="🛡️"
-          onPress={() => navigation.navigate('AdminChatMonitoring')}
-        />
-        <NavCard
           title="Reports Queue"
           subtitle="Review reported message violations"
-          color="#ef4444"
+          color="#fbbf24"
           icon="⚠️"
           onPress={() => navigation.navigate('AdminReports')}
           badgeCount={pendingReportCount}
@@ -124,7 +106,7 @@ export default function AdminDashboardScreen({ navigation }) {
             <NavCard
               title="Create Admin Account"
               subtitle="Add a new administrator directly"
-              color="#f472b6"
+              color="#2563eb"
               icon="➕"
               onPress={() => navigation.navigate('CreateAdmin')}
             />
@@ -139,31 +121,31 @@ export default function AdminDashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0a0e1a',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     paddingTop: 52,
     paddingBottom: 20,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#1e293b',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#f8fafc',
+    color: '#f1f5f9',
   },
   headerSub: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2,
   },
   logoutBtn: {
-    backgroundColor: 'rgba(239,68,68,0.15)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderColor: '#ef4444',
     borderWidth: 1,
     paddingHorizontal: 14,
@@ -185,14 +167,17 @@ const styles = StyleSheet.create({
     color: '#64748b',
     letterSpacing: 1,
     textTransform: 'uppercase',
+    fontVariant: ['small-caps'],
     marginTop: 24,
     marginBottom: 10,
   },
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     borderRadius: 12,
     marginBottom: 10,
     borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: '#1e293b',
     overflow: 'hidden',
   },
   cardContent: {
@@ -207,16 +192,16 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#f1f5f9',
   },
   cardSubtitle: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2,
   },
   cardArrow: {
     fontSize: 22,
-    color: '#475569',
+    color: '#64748b',
   },
   badge: {
     backgroundColor: '#ef4444',

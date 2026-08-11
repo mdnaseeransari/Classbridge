@@ -8,11 +8,16 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
+  Platform,
+  Alert,
+  Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 import { connectSocket, getSocket } from '../../services/socket';
+import ChatRoomScreen from './ChatRoomScreen';
 
 export default function ChatInboxScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -20,14 +25,22 @@ export default function ChatInboxScreen({ navigation }) {
     navigation.getParent()?.getParent() ?? 
     navigation.getParent() ?? 
     navigation;
+  const { width } = useWindowDimensions();
+  const isLargeScreen = width >= 768;
+
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState({});
+  const [showArchived, setShowArchived] = useState(false);
+  const [actionMenuVisible, setActionMenuVisible] = useState(false);
+  const [selectedConvo, setSelectedConvo] = useState(null);
+  const [selectedConvoId, setSelectedConvoId] = useState(null);
+  const [selectedConvoTitle, setSelectedConvoTitle] = useState('');
 
   const fetchConversations = async () => {
     try {
-      const res = await api.get('/chat/conversations');
+      const res = await api.get('/chat/conversations', { params: { archived: showArchived } });
       const convos = res.data.conversations || [];
       console.log('[DEBUG_INBOX] Raw Conversations:', JSON.stringify(convos, null, 2));
       setConversations(convos);
@@ -160,7 +173,7 @@ export default function ChatInboxScreen({ navigation }) {
     useCallback(() => {
       setLoading(true);
       fetchConversations().finally(() => setLoading(false));
-    }, [user])
+    }, [user, showArchived])
   );
 
   const handleRefresh = async () => {
@@ -184,8 +197,51 @@ export default function ChatInboxScreen({ navigation }) {
     rootNav().navigate('JoinGroup');
   };
 
+  const togglePin = async (convoId, isPinned) => {
+    try {
+      if (isPinned) {
+        await api.post(`/chat/conversations/${convoId}/unpin`);
+      } else {
+        await api.post(`/chat/conversations/${convoId}/pin`);
+      }
+      fetchConversations();
+    } catch (err) {
+      console.error('[INBOX] Error toggling pin:', err);
+    }
+  };
+
+  const toggleArchive = async (convoId, isArchived) => {
+    try {
+      if (isArchived) {
+        await api.post(`/chat/conversations/${convoId}/unarchive`);
+      } else {
+        await api.post(`/chat/conversations/${convoId}/archive`);
+      }
+      fetchConversations();
+    } catch (err) {
+      console.error('[INBOX] Error toggling archive:', err);
+    }
+  };
+
+  const toggleMute = async (convoId, isMuted) => {
+    try {
+      if (isMuted) {
+        await api.post(`/chat/conversations/${convoId}/unmute`);
+      } else {
+        await api.post(`/chat/conversations/${convoId}/mute`);
+      }
+      fetchConversations();
+    } catch (err) {
+      console.error('[INBOX] Error toggling mute:', err);
+    }
+  };
+
+  const handleLongPress = (item) => {
+    setSelectedConvo(item);
+    setActionMenuVisible(true);
+  };
+
   const renderItem = ({ item }) => {
-    // Determine title, avatar and online status
     let title = item.name || 'Group Chat';
     let isOnline = false;
     let otherParticipant = null;
@@ -196,120 +252,272 @@ export default function ChatInboxScreen({ navigation }) {
       isOnline = !!onlineUsers[otherParticipant?._id];
     }
 
-    // Check unread count: messages where sender !== user and user is not in readBy
     const unreadCount = item.unreadCount || 0;
 
     const formattedTime = item.lastActivityAt
       ? new Date(item.lastActivityAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '';
 
-    return (
-      <TouchableOpacity
-        style={styles.item}
-        activeOpacity={0.75}
-        onPress={() => {
-          // Same parent-escape pattern: ChatRoom is a stack screen, not a tab screen.
-          rootNav().navigate('ChatRoom', { conversationId: item._id, title });
-        }}
-      >
-        <View style={styles.avatarContainer}>
-          <View style={[styles.avatar, { backgroundColor: item.type === 'direct' ? '#38bdf822' : '#8b5cf622' }]}>
-            <Text style={[styles.avatarText, { color: item.type === 'direct' ? '#38bdf8' : '#8b5cf6' }]}>
-              {title[0]?.toUpperCase() || '?'}
-            </Text>
-          </View>
-          {item.type === 'direct' && isOnline && <View style={styles.onlineDot} />}
-        </View>
+    let avatarBgColor = 'rgba(37, 99, 235, 0.1)';
+    let avatarTextColor = '#2563eb';
+    if (item.type === 'direct' && otherParticipant) {
+      if (otherParticipant.role === 'teacher') {
+        avatarBgColor = 'rgba(16, 185, 129, 0.1)';
+        avatarTextColor = '#10b981';
+      } else if (otherParticipant.role === 'student') {
+        avatarBgColor = 'rgba(124, 58, 237, 0.1)';
+        avatarTextColor = '#7c3aed';
+      }
+    } else {
+      avatarBgColor = 'rgba(239, 68, 68, 0.1)';
+      avatarTextColor = '#ef4444';
+    }
 
-        <View style={styles.details}>
-          <View style={styles.row}>
-            <Text style={styles.name} numberOfLines={1}>
-              {title}
-            </Text>
-            <Text style={styles.time}>{formattedTime}</Text>
+    const getPressProps = (convo) => {
+      if (Platform.OS === 'web') {
+        return {
+          onContextMenu: (e) => {
+            e.preventDefault();
+            handleLongPress(convo);
+          }
+        };
+      }
+      return {
+        onLongPress: () => handleLongPress(convo),
+      };
+    };
+
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#1e293b' }}>
+        <TouchableOpacity
+          style={[styles.item, { flex: 1, borderBottomWidth: 0 }]}
+          activeOpacity={0.75}
+          onPress={() => {
+            if (isLargeScreen) {
+              setSelectedConvoId(item._id);
+              setSelectedConvoTitle(title);
+            } else {
+              rootNav().navigate('ChatRoom', { conversationId: item._id, title });
+            }
+          }}
+          {...getPressProps(item)}
+        >
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, { backgroundColor: avatarBgColor }]}>
+              <Text style={[styles.avatarText, { color: avatarTextColor }]}>
+                {title[0]?.toUpperCase() || '?'}
+              </Text>
+            </View>
+            {item.type === 'direct' && isOnline && <View style={styles.onlineDot} />}
           </View>
-          <View style={styles.row}>
-            <Text style={styles.preview} numberOfLines={1}>
-              {item.lastMessage?.content || 'No messages yet'}
-            </Text>
-            {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount}</Text>
-              </View>
-            )}
+  
+          <View style={styles.details}>
+            <View style={styles.row}>
+              <Text style={styles.name} numberOfLines={1}>
+                {item.isPinned && '📌 '}
+                {item.isMuted && '🔇 '}
+                {title}
+              </Text>
+              <Text style={styles.time}>{formattedTime}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.preview} numberOfLines={1}>
+                {item.lastMessage?.content || 'No messages yet'}
+              </Text>
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => handleLongPress(item)}
+          style={{ paddingHorizontal: 16, paddingVertical: 20 }}
+        >
+          <Text style={{ color: '#64748b', fontSize: 18, fontWeight: '700' }}>⋮</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
 
   const isAdmin = ['admin', 'superadmin'].includes(user?.role);
 
+  const renderInboxContent = () => {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0a0e1a' }}>
+        <View style={styles.header}>
+          {showArchived ? (
+            <TouchableOpacity onPress={() => setShowArchived(false)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.backText}>← Inbox</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.headerTitle}>Messages</Text>
+          )}
+          
+          {showArchived ? (
+            <Text style={styles.headerTitle}>Archived</Text>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity style={[styles.newChatBtn, { backgroundColor: '#111827', borderWidth: 1, borderColor: '#1e293b' }]} onPress={handleJoinGroup}>
+                <Text style={[styles.newChatBtnText, { color: '#2563eb' }]}>Join Group</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.newChatBtn} onPress={handleCreateChat}>
+                <Text style={styles.newChatBtnText}>＋ New</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {isAdmin && !showArchived && (
+          <View style={styles.adminBar}>
+            <Text style={styles.adminBarText}>Group Administration:</Text>
+            <TouchableOpacity style={styles.adminBarBtn} onPress={handleCreateGroup}>
+              <Text style={styles.adminBarBtnText}>＋ Create Group Chat</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!showArchived && (
+          <TouchableOpacity
+            style={styles.archiveHeaderRow}
+            onPress={() => setShowArchived(true)}
+          >
+            <Text style={styles.archiveHeaderText}>📁 Archived Conversations</Text>
+          </TouchableOpacity>
+        )}
+
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#2563eb" />
+          </View>
+        ) : (
+          <FlatList
+            data={conversations}
+            keyExtractor={(item) => item._id}
+            extraData={{ conversations, onlineUsers }}
+            renderItem={renderItem}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+            }
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.emptyText}>No conversations yet.</Text>
+              </View>
+            }
+            contentContainerStyle={{ paddingBottom: 40 }}
+          />
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity style={[styles.newChatBtn, { backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155' }]} onPress={handleJoinGroup}>
-            <Text style={[styles.newChatBtnText, { color: '#38bdf8' }]}>Join Group</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.newChatBtn} onPress={handleCreateChat}>
-            <Text style={styles.newChatBtnText}>＋ New</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {isAdmin && (
-        <View style={styles.adminBar}>
-          <Text style={styles.adminBarText}>Group Administration:</Text>
-          <TouchableOpacity style={styles.adminBarBtn} onPress={handleCreateGroup}>
-            <Text style={styles.adminBarBtnText}>＋ Create Group Chat</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38bdf8" />
+      <StatusBar barStyle="light-content" backgroundColor="#0a0e1a" />
+      {isLargeScreen ? (
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          {/* Left Pane: Inbox List */}
+          <View style={{ width: 350, borderRightWidth: 1, borderRightColor: '#1e293b' }}>
+            {renderInboxContent()}
+          </View>
+          {/* Right Pane: Chat Room */}
+          <View style={{ flex: 1, backgroundColor: '#0e1621' }}>
+            {selectedConvoId ? (
+              <ChatRoomScreen
+                key={selectedConvoId}
+                route={{ params: { conversationId: selectedConvoId, title: selectedConvoTitle } }}
+                navigation={navigation}
+                isInline={true}
+              />
+            ) : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: '#64748b', fontSize: 16 }}>Select a conversation to start chatting</Text>
+              </View>
+            )}
+          </View>
         </View>
       ) : (
-        <FlatList
-          data={conversations}
-          keyExtractor={(item) => item._id}
-          extraData={{ conversations, onlineUsers }}
-          renderItem={renderItem}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#38bdf8" />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>No conversations yet.</Text>
-            </View>
-          }
-          contentContainerStyle={{ paddingBottom: 40 }}
-        />
+        renderInboxContent()
       )}
+
+      {/* Conversation Action Sheet Modal */}
+      <Modal
+        visible={actionMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setActionMenuVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalTitle, { marginBottom: 12 }]}>Conversation Options</Text>
+            
+            <TouchableOpacity
+              style={styles.actionMenuBtn}
+              onPress={() => {
+                setActionMenuVisible(false);
+                togglePin(selectedConvo?._id, selectedConvo?.isPinned);
+              }}
+            >
+              <Text style={styles.actionMenuBtnText}>
+                {selectedConvo?.isPinned ? 'Unpin Chat 📌' : 'Pin Chat 📌'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionMenuBtn}
+              onPress={() => {
+                setActionMenuVisible(false);
+                toggleArchive(selectedConvo?._id, selectedConvo?.isArchived);
+              }}
+            >
+              <Text style={styles.actionMenuBtnText}>
+                {selectedConvo?.isArchived ? 'Unarchive Chat 📁' : 'Archive Chat 📁'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionMenuBtn}
+              onPress={() => {
+                setActionMenuVisible(false);
+                toggleMute(selectedConvo?._id, selectedConvo?.isMuted);
+              }}
+            >
+              <Text style={styles.actionMenuBtnText}>
+                {selectedConvo?.isMuted ? 'Unmute Chat 🔊' : 'Mute Chat 🔇'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionMenuBtn, { borderBottomWidth: 0, marginTop: 12 }]}
+              onPress={() => setActionMenuVisible(false)}
+            >
+              <Text style={[styles.actionMenuBtnText, { color: '#64748b', textAlign: 'center' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#0a0e1a' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#1e293b',
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#f8fafc' },
-  newChatBtn: { backgroundColor: '#38bdf8', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  newChatBtnText: { color: '#0f172a', fontWeight: '700', fontSize: 13 },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: '#f1f5f9' },
+  newChatBtn: { backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  newChatBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { color: '#64748b', fontSize: 15 },
   item: {
@@ -329,28 +537,56 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#10b981',
     borderWidth: 2,
-    borderColor: '#0f172a',
+    borderColor: '#0a0e1a',
   },
   details: { flex: 1, marginLeft: 14 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
-  name: { fontSize: 16, fontWeight: '700', color: '#f8fafc' },
+  name: { fontSize: 16, fontWeight: '700', color: '#f1f5f9' },
   time: { fontSize: 11, color: '#64748b' },
-  preview: { fontSize: 13, color: '#94a3b8', flex: 1, marginRight: 8 },
-  badge: { backgroundColor: '#38bdf8', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
-  badgeText: { color: '#0f172a', fontSize: 11, fontWeight: '800' },
+  preview: { fontSize: 13, color: '#64748b', flex: 1, marginRight: 8 },
+  badge: { backgroundColor: '#2563eb', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
+  badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '800' },
   adminBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#1e293b',
   },
   adminBarText: { color: '#64748b', fontSize: 12, fontWeight: '600' },
-  adminBarBtn: { backgroundColor: '#8b5cf622', borderWidth: 1, borderColor: '#8b5cf6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  adminBarBtnText: { color: '#c084fc', fontSize: 12, fontWeight: '700' },
+  adminBarBtn: { backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 1, borderColor: '#2563eb', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  adminBarBtnText: { color: '#2563eb', fontSize: 12, fontWeight: '700' },
+  archiveHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111827',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  archiveHeaderText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#111827', borderRadius: 12, width: '85%', padding: 20, borderWidth: 1, borderColor: '#1e293b' },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: '#f1f5f9' },
+  actionMenuBtn: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  actionMenuBtnText: {
+    fontSize: 15,
+    color: '#f1f5f9',
+    fontWeight: '600',
+  },
 });

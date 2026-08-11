@@ -11,6 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import api from '../../services/api';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function CreateGroupScreen({ navigation }) {
   const [groupName, setGroupName] = useState('');
@@ -26,7 +27,6 @@ export default function CreateGroupScreen({ navigation }) {
         setError('');
         const res = await api.get('/admin/users', { params: { limit: 100 } });
         const list = res.data.users || [];
-        // Filter: Must be approved, NOT banned, and NOT self (though the backend handles self addition, we show others)
         const filtered = list.filter((u) => u.status === 'approved' && !u.isBanned);
         setUsers(filtered);
       } catch (err) {
@@ -99,7 +99,7 @@ export default function CreateGroupScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>Cancel</Text>
@@ -107,7 +107,7 @@ export default function CreateGroupScreen({ navigation }) {
         <Text style={styles.headerTitle}>New Group</Text>
         <TouchableOpacity onPress={handleCreateGroup} disabled={submitting}>
           {submitting ? (
-            <ActivityIndicator color="#38bdf8" />
+            <ActivityIndicator color={COLORS.accent} />
           ) : (
             <Text style={styles.createText}>Create</Text>
           )}
@@ -119,7 +119,7 @@ export default function CreateGroupScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="e.g. Science Class 10A"
-          placeholderTextColor="#475569"
+          placeholderTextColor={COLORS.textSecondary}
           value={groupName}
           onChangeText={setGroupName}
         />
@@ -128,7 +128,7 @@ export default function CreateGroupScreen({ navigation }) {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#38bdf8" />
+            <ActivityIndicator size="large" color={COLORS.accent} />
           </View>
         ) : error ? (
           <View style={styles.center}>
@@ -148,53 +148,53 @@ export default function CreateGroupScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#64748b', fontSize: 15, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
-  createText: { color: '#38bdf8', fontSize: 15, fontWeight: '700' },
+  backText: { color: COLORS.textSecondary, fontSize: 15, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
+  createText: { color: COLORS.accent, fontSize: 15, fontWeight: '700' },
   body: { flex: 1, padding: 16 },
-  label: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+  label: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
   input: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.button,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
     padding: 14,
-    color: '#f8fafc',
+    color: COLORS.textPrimary,
     fontSize: 15,
     marginBottom: 16,
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: '#ef4444', textAlign: 'center' },
+  errorText: { color: COLORS.danger, textAlign: 'center' },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: RADIUS.card,
     marginBottom: 8,
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
   },
-  userRowSelected: { borderColor: '#38bdf8', backgroundColor: '#38bdf811' },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#38bdf822', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#38bdf8', fontSize: 14, fontWeight: '800' },
+  userRowSelected: { borderColor: COLORS.accent, backgroundColor: 'rgba(37, 99, 235, 0.1)' },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(37, 99, 235, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: COLORS.accent, fontSize: 14, fontWeight: '800' },
   userDetails: { flex: 1, marginLeft: 12 },
-  userName: { fontSize: 14, fontWeight: '700', color: '#f8fafc' },
-  userRole: { fontSize: 10, fontWeight: '600', color: '#64748b', marginTop: 2 },
-  checkbox: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#475569', justifyContent: 'center', alignItems: 'center' },
-  checkboxSelected: { borderColor: '#38bdf8', backgroundColor: '#38bdf8' },
-  checkboxCheck: { color: '#0f172a', fontSize: 12, fontWeight: '800' },
+  userName: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary },
+  userRole: { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary, marginTop: 2 },
+  checkbox: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: COLORS.textSecondary, justifyContent: 'center', alignItems: 'center' },
+  checkboxSelected: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
+  checkboxCheck: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
 });

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as adminApi from '../../services/adminApi';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 function PendingCard({ user, onApprove, onReject, loading }) {
   const [note, setNote] = useState('');
@@ -28,13 +29,29 @@ function PendingCard({ user, onApprove, onReject, loading }) {
     <View style={styles.card}>
       {/* User Info */}
       <View style={styles.cardHeader}>
-        <View style={styles.cardAvatar}>
-          <Text style={styles.cardAvatarText}>{user.name?.[0]?.toUpperCase() || '?'}</Text>
+        <View style={[styles.cardAvatar, { backgroundColor: user.role === 'teacher' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(124, 58, 237, 0.1)' }]}>
+          <Text style={[styles.cardAvatarText, { color: user.role === 'teacher' ? '#10b981' : '#7c3aed' }]}>
+            {user.name?.[0]?.toUpperCase() || '?'}
+          </Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardName}>{user.name}</Text>
           <Text style={styles.cardPhone}>{user.phone || '—'}</Text>
-          <Text style={styles.cardMeta}>{roleLabel}{extra ? ` · ${extra}` : ''}</Text>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <View style={[styles.roleBadge, { backgroundColor: user.role === 'teacher' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(124, 58, 237, 0.1)' }]}>
+              <Text style={[styles.roleBadgeText, { color: user.role === 'teacher' ? '#10b981' : '#7c3aed' }]}>
+                {user.role.toUpperCase()}
+              </Text>
+            </View>
+            <View style={[styles.roleBadge, { backgroundColor: 'rgba(251, 191, 36, 0.1)' }]}>
+              <Text style={[styles.roleBadgeText, { color: '#fbbf24' }]}>
+                {user.status.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          {extra ? <Text style={styles.cardMeta}>{extra}</Text> : null}
           <Text style={styles.cardDate}>
             Registered: {new Date(user.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
           </Text>
@@ -45,7 +62,7 @@ function PendingCard({ user, onApprove, onReject, loading }) {
       <TextInput
         style={styles.noteInput}
         placeholder="Add note (optional)..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={COLORS.textSecondary}
         value={note}
         onChangeText={setNote}
         multiline
@@ -150,7 +167,7 @@ export default function PendingApprovalsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -171,7 +188,7 @@ export default function PendingApprovalsScreen({ navigation }) {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#fbbf24" />
+          <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       ) : (
         <FlatList
@@ -186,7 +203,7 @@ export default function PendingApprovalsScreen({ navigation }) {
             />
           )}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#fbbf24" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.accent} />
           }
           ListEmptyComponent={
             <View style={styles.center}>
@@ -203,71 +220,71 @@ export default function PendingApprovalsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#38bdf8', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
+  backText: { color: COLORS.accent, fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
   countBadge: {
-    backgroundColor: '#fbbf2422',
-    borderColor: '#fbbf24',
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+    borderColor: COLORS.accent,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 2,
   },
-  countText: { color: '#fbbf24', fontWeight: '800', fontSize: 13 },
+  countText: { color: COLORS.accent, fontWeight: '800', fontSize: 13 },
   errorBox: {
     margin: 16,
-    backgroundColor: 'rgba(239,68,68,0.12)',
-    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: COLORS.danger,
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
   },
-  errorText: { color: '#f87171', textAlign: 'center', fontSize: 13 },
+  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 13 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { color: '#f8fafc', fontSize: 18, fontWeight: '700' },
-  emptySubtext: { color: '#64748b', fontSize: 14, marginTop: 4 },
+  emptyText: { color: COLORS.textPrimary, fontSize: 18, fontWeight: '700' },
+  emptySubtext: { color: COLORS.textSecondary, fontSize: 14, marginTop: 4 },
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.card,
     marginBottom: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
   },
   cardHeader: { flexDirection: 'row', gap: 14, marginBottom: 14 },
   cardAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#fbbf2422',
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardAvatarText: { fontSize: 20, fontWeight: '800', color: '#fbbf24' },
-  cardName: { fontSize: 16, fontWeight: '700', color: '#f8fafc' },
-  cardPhone: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
-  cardMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  cardDate: { fontSize: 11, color: '#475569', marginTop: 3 },
+  cardAvatarText: { fontSize: 20, fontWeight: '800', color: COLORS.accent },
+  cardName: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
+  cardPhone: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  cardMeta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  cardDate: { fontSize: 11, color: COLORS.textSecondary, marginTop: 3 },
   noteInput: {
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.button,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: COLORS.cardBorder,
     padding: 10,
-    color: '#f8fafc',
+    color: COLORS.textPrimary,
     fontSize: 13,
     marginBottom: 12,
     minHeight: 44,
@@ -276,10 +293,19 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: RADIUS.button,
     alignItems: 'center',
   },
-  approveBtn: { backgroundColor: '#16a34a' },
-  rejectBtn: { backgroundColor: '#dc2626' },
+  approveBtn: { backgroundColor: COLORS.success },
+  rejectBtn: { backgroundColor: COLORS.danger },
   actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
 });

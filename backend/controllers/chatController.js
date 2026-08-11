@@ -20,8 +20,10 @@ function isMember(role) { return MEMBER_ROLES.includes(role); }
  * Blocked: teacher↔student, teacher↔teacher, student↔student.
  */
 function canDirectChat(roleA, roleB) {
-  // Block only when both sides are members (teacher or student)
-  return !(isMember(roleA) && isMember(roleB));
+  // Direct chat is allowed between every role combination EXCEPT Teacher ↔ Student.
+  const isTeacher = roleA === 'teacher' || roleB === 'teacher';
+  const isStudent = roleA === 'student' || roleB === 'student';
+  return !(isTeacher && isStudent);
 }
 
 /**
@@ -103,28 +105,54 @@ async function listConversations(req, res) {
   try {
     const callerId = req.user.id;
     const callerRole = req.user.role;
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, archived = 'false' } = req.query;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
+    // Get user's pinned, archived, and muted arrays
+    const userObj = await User.findById(callerId).select('pinnedConversations archivedConversations mutedConversations');
+    const pinnedIds = userObj?.pinnedConversations?.map(id => id.toString()) || [];
+    const archivedIds = userObj?.archivedConversations?.map(id => id.toString()) || [];
+    const mutedIds = userObj?.mutedConversations?.map(id => id.toString()) || [];
+
+    const isArchivedQuery = archived === 'true';
+    const query = {
+      participants: callerId,
+      _id: isArchivedQuery ? { $in: archivedIds } : { $nin: archivedIds }
+    };
+
     // Users can only see conversations they participate in.
-    // This also enforces the visibility rule: admin A cannot see admin B's DMs
-    // because admin B's DMs don't list admin A in their participants array.
     const [conversations, total] = await Promise.all([
-      Conversation.find({ participants: callerId })
-        .sort({ lastActivityAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
+      Conversation.find(query)
         .populate('participants', senderProjection(callerRole))
         .populate({ path: 'lastMessage', select: 'content type createdAt sender isDeleted' })
         .lean(),
-      Conversation.countDocuments({ participants: callerId }),
+      Conversation.countDocuments(query),
     ]);
 
+    // Map fields
+    const mapped = conversations.map(c => ({
+      ...c,
+      isPinned: pinnedIds.includes(c._id.toString()),
+      isArchived: archivedIds.includes(c._id.toString()),
+      isMuted: mutedIds.includes(c._id.toString()),
+    }));
+
+    // Sort: Pinned first, then newest lastActivityAt/createdAt first
+    mapped.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      const timeA = new Date(a.lastActivityAt || a.createdAt);
+      const timeB = new Date(b.lastActivityAt || b.createdAt);
+      return timeB - timeA;
+    });
+
+    const paginatedConversations = mapped.slice(skip, skip + limitNum);
+
     return res.status(200).json({
-      conversations,
+      conversations: paginatedConversations,
       pagination: {
         total,
         page: pageNum,
@@ -163,7 +191,17 @@ async function getConversation(req, res) {
       return res.status(403).json({ error: 'You are not a participant in this conversation.' });
     }
 
-    return res.status(200).json({ conversation });
+    const userObj = await User.findById(callerId).select('pinnedConversations archivedConversations mutedConversations');
+    const pinnedIds = userObj?.pinnedConversations?.map(id => id.toString()) || [];
+    const archivedIds = userObj?.archivedConversations?.map(id => id.toString()) || [];
+    const mutedIds = userObj?.mutedConversations?.map(id => id.toString()) || [];
+
+    const convoObj = conversation.toObject();
+    convoObj.isPinned = pinnedIds.includes(conversation._id.toString());
+    convoObj.isArchived = archivedIds.includes(conversation._id.toString());
+    convoObj.isMuted = mutedIds.includes(conversation._id.toString());
+
+    return res.status(200).json({ conversation: convoObj });
   } catch (err) {
     console.error('[CHAT] getConversation error:', err);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -837,6 +875,29 @@ async function listAdmins(req, res) {
   }
 }
 
+async function listContacts(req, res) {
+  try {
+    const callerId = req.user.id;
+    const callerRole = req.user.role;
+
+    let query = { status: 'approved', isBanned: false, _id: { $ne: callerId } };
+
+    if (callerRole === 'teacher') {
+      // Teachers can only DM Admins/Super Admins and other Teachers
+      query.role = { $in: ['admin', 'superadmin', 'teacher'] };
+    } else if (callerRole === 'student') {
+      // Students can only DM Admins/Super Admins and other Students
+      query.role = { $in: ['admin', 'superadmin', 'student'] };
+    }
+
+    const contacts = await User.find(query, senderProjection(callerRole)).sort({ name: 1 });
+    return res.status(200).json({ users: contacts });
+  } catch (err) {
+    console.error('[CHAT] listContacts error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 async function editMessage(req, res) {
   try {
     const callerId = req.user.id;
@@ -1026,6 +1087,166 @@ async function forwardMessage(req, res) {
   }
 }
 
+async function pinConversation(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+
+    const conversation = await Conversation.findById(id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found.' });
+    }
+
+    if (!conversation.participants.some(p => p.toString() === callerId)) {
+      return res.status(403).json({ error: 'You are not a participant in this conversation.' });
+    }
+
+    await User.findByIdAndUpdate(callerId, {
+      $addToSet: { pinnedConversations: id },
+    });
+
+    return res.status(200).json({ success: true, message: 'Conversation pinned.' });
+  } catch (err) {
+    console.error('[CHAT] pinConversation error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function unpinConversation(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+
+    await User.findByIdAndUpdate(callerId, {
+      $pull: { pinnedConversations: id },
+    });
+
+    return res.status(200).json({ success: true, message: 'Conversation unpinned.' });
+  } catch (err) {
+    console.error('[CHAT] unpinConversation error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function archiveConversation(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+
+    const conversation = await Conversation.findById(id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found.' });
+    }
+
+    if (!conversation.participants.some(p => p.toString() === callerId)) {
+      return res.status(403).json({ error: 'You are not a participant.' });
+    }
+
+    await User.findByIdAndUpdate(callerId, {
+      $addToSet: { archivedConversations: id },
+    });
+
+    return res.status(200).json({ success: true, message: 'Conversation archived.' });
+  } catch (err) {
+    console.error('[CHAT] archiveConversation error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function unarchiveConversation(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+
+    await User.findByIdAndUpdate(callerId, {
+      $pull: { archivedConversations: id },
+    });
+
+    return res.status(200).json({ success: true, message: 'Conversation unarchived.' });
+  } catch (err) {
+    console.error('[CHAT] unarchiveConversation error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function muteConversation(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+
+    const conversation = await Conversation.findById(id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found.' });
+    }
+
+    if (!conversation.participants.some(p => p.toString() === callerId)) {
+      return res.status(403).json({ error: 'You are not a participant.' });
+    }
+
+    await User.findByIdAndUpdate(callerId, {
+      $addToSet: { mutedConversations: id },
+    });
+
+    return res.status(200).json({ success: true, message: 'Conversation muted.' });
+  } catch (err) {
+    console.error('[CHAT] muteConversation error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function unmuteConversation(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+
+    await User.findByIdAndUpdate(callerId, {
+      $pull: { mutedConversations: id },
+    });
+
+    return res.status(200).json({ success: true, message: 'Conversation unmuted.' });
+  } catch (err) {
+    console.error('[CHAT] unmuteConversation error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+async function searchMessages(req, res) {
+  try {
+    const callerId = req.user.id;
+    const { id } = req.params;
+    const { q } = req.query;
+
+    if (!q || !q.trim()) {
+      return res.status(400).json({ error: 'Search query is required.' });
+    }
+
+    const conversation = await Conversation.findById(id).select('participants');
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found.' });
+    }
+
+    const isParticipant = conversation.participants.some(p => p.toString() === callerId);
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'You are not a participant in this conversation.' });
+    }
+
+    const queryRegex = new RegExp(q.trim(), 'i');
+    const messages = await Message.find({
+      conversation: id,
+      content: queryRegex,
+      isDeleted: false
+    })
+      .populate('sender', 'name role')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    return res.status(200).json({ messages });
+  } catch (err) {
+    console.error('[CHAT] searchMessages error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 module.exports = {
   getOrCreateDirect,
   listConversations,
@@ -1042,8 +1263,16 @@ module.exports = {
   sendFileAttachment,
   reportMessage,
   listAdmins,
+  listContacts,
   editMessage,
   deleteMessage,
   forwardMessage,
+  pinConversation,
+  unpinConversation,
+  archiveConversation,
+  unarchiveConversation,
+  muteConversation,
+  unmuteConversation,
+  searchMessages,
 };
 

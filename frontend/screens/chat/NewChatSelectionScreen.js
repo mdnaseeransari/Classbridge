@@ -11,17 +11,18 @@ import {
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
+import { COLORS, SPACING, RADIUS } from '../../theme';
 
 // Role display config: label, avatar colour, text colour
 const ROLE_META = {
-  superadmin: { label: 'Super Admin', avatarBg: '#7c3aed22', avatarText: '#a78bfa' },
-  admin:      { label: 'Admin',       avatarBg: '#0ea5e922', avatarText: '#38bdf8' },
-  teacher:    { label: 'Teacher',     avatarBg: '#10b98122', avatarText: '#34d399' },
-  student:    { label: 'Student',     avatarBg: '#f59e0b22', avatarText: '#fbbf24' },
+  superadmin: { label: 'Super Admin', avatarBg: 'rgba(124, 58, 237, 0.1)', avatarText: '#a78bfa' },
+  admin:      { label: 'Admin',       avatarBg: 'rgba(37, 99, 235, 0.1)', avatarText: '#2563eb' },
+  teacher:    { label: 'Teacher',     avatarBg: 'rgba(16, 185, 129, 0.1)', avatarText: '#10b981' },
+  student:    { label: 'Student',     avatarBg: 'rgba(245, 158, 11, 0.1)', avatarText: '#fbbf24' },
 };
 
 function getRoleMeta(role) {
-  return ROLE_META[role] || { label: role, avatarBg: '#64748b22', avatarText: '#94a3b8' };
+  return ROLE_META[role] || { label: role, avatarBg: 'rgba(100, 116, 139, 0.1)', avatarText: '#64748b' };
 }
 
 export default function NewChatSelectionScreen({ navigation }) {
@@ -39,44 +40,9 @@ export default function NewChatSelectionScreen({ navigation }) {
     const fetchRecipients = async () => {
       try {
         setError('');
-
-        if (isAdmin) {
-          // Admins can DM any approved, non-banned user of any role —
-          // including other Admins and Super Admins.
-          // /admin/users returns all roles; we filter out self + banned + non-approved client-side.
-          const res = await api.get('/admin/users', { params: { limit: 200 } });
-          const list = res.data.users || [];
-
-          const eligible = list.filter(
-            (u) =>
-              u._id !== user?._id &&       // not self
-              u.status === 'approved' &&    // must be approved
-              !u.isBanned                   // must not be banned
-          );
-
-          // Sort: admins/superadmins first, then teachers, then students — all alpha within group
-          const roleOrder = { superadmin: 0, admin: 1, teacher: 2, student: 3 };
-          eligible.sort((a, b) => {
-            const ro = (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99);
-            return ro !== 0 ? ro : a.name.localeCompare(b.name);
-          });
-
-          setAllRecipients(eligible);
-        } else {
-          // Teachers and Students can only DM Admins and Super Admins.
-          // We call our public /chat/admins endpoint which retrieves approved admins/superadmins.
-          const res = await api.get('/chat/admins');
-          const list = res.data.users || [];
-
-          // Sort by name
-          list.sort((a, b) => a.name.localeCompare(b.name));
-
-          if (list.length === 0) {
-            setError('No administrator contacts are available right now.');
-          } else {
-            setAllRecipients(list);
-          }
-        }
+        const res = await api.get('/chat/contacts');
+        const list = res.data.users || [];
+        setAllRecipients(list);
       } catch (err) {
         console.error('[NEW_CHAT] fetchRecipients error:', err);
         setError('Failed to fetch available contacts.');
@@ -147,21 +113,21 @@ export default function NewChatSelectionScreen({ navigation }) {
     );
   };
 
-  // ── Section header injected via ListHeaderComponent ─────────────────────────
-  // Shows a brief hint about who can be messaged
   const listHeader = (
     <View style={styles.hint}>
       <Text style={styles.hintText}>
         {isAdmin
           ? 'Select anyone to start a direct message.'
-          : 'You can only message Admins and Super Admins.'}
+          : user?.role === 'teacher'
+          ? 'Select an Admin or another Teacher to message.'
+          : 'Select an Admin or another Student to message.'}
       </Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -178,7 +144,7 @@ export default function NewChatSelectionScreen({ navigation }) {
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name or role…"
-            placeholderTextColor="#475569"
+            placeholderTextColor={COLORS.textSecondary}
             value={search}
             onChangeText={setSearch}
             autoCorrect={false}
@@ -189,7 +155,7 @@ export default function NewChatSelectionScreen({ navigation }) {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38bdf8" />
+          <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       ) : error ? (
         <View style={styles.center}>
@@ -217,59 +183,54 @@ export default function NewChatSelectionScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-
+  container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
-  backText: { color: '#64748b', fontSize: 15, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
-
+  backText: { color: COLORS.textSecondary, fontSize: 15, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
   searchRow: {
-    backgroundColor: '#1e293b',
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 16,
     paddingBottom: 12,
     paddingTop: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: COLORS.cardBorder,
   },
   searchInput: {
-    backgroundColor: '#0f172a',
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 10,
+    borderColor: COLORS.cardBorder,
+    borderRadius: RADIUS.button,
     paddingHorizontal: 14,
     paddingVertical: 9,
-    color: '#f8fafc',
+    color: COLORS.textPrimary,
     fontSize: 14,
   },
-
   hint: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 6,
   },
-  hintText: { color: '#475569', fontSize: 12, fontStyle: 'italic' },
-
+  hintText: { color: COLORS.textSecondary, fontSize: 12, fontStyle: 'italic' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: '#ef4444', textAlign: 'center', fontSize: 14, lineHeight: 20 },
-  emptyText: { color: '#64748b', fontSize: 15, textAlign: 'center' },
-
+  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 14, lineHeight: 20 },
+  emptyText: { color: COLORS.textSecondary, fontSize: 15, textAlign: 'center' },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: COLORS.cardBorder,
   },
   avatar: {
     width: 46,
@@ -280,7 +241,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 17, fontWeight: '800' },
   details: { flex: 1, marginLeft: 13 },
-  name: { fontSize: 15, fontWeight: '700', color: '#f8fafc' },
+  name: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
   roleLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  chevron: { color: '#334155', fontSize: 22, fontWeight: '300' },
+  chevron: { color: COLORS.cardBorder, fontSize: 22, fontWeight: '300' },
 });

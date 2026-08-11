@@ -105,6 +105,34 @@ const messageSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    reactions: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        reaction: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
+
+    deliveredTo: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        deliveredAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );

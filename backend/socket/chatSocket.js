@@ -11,8 +11,10 @@ const MEMBER_ROLES = ['teacher', 'student'];
 function isAdmin(role) { return ADMIN_ROLES.includes(role); }
 function isMember(role) { return MEMBER_ROLES.includes(role); }
 function canDirectChat(roleA, roleB) {
-  // Block only when both sides are members (teacher or student)
-  return !(isMember(roleA) && isMember(roleB));
+  // Direct chat is allowed between every role combination EXCEPT Teacher ↔ Student.
+  const isTeacher = roleA === 'teacher' || roleB === 'teacher';
+  const isStudent = roleA === 'student' || roleB === 'student';
+  return !(isTeacher && isStudent);
 }
 
 /**
@@ -248,6 +250,8 @@ function initChatSocket(io) {
           createdAt: message.createdAt,
           replyTo: replyToPayload,
           readBy: [],
+          deliveredTo: [],
+          reactions: [],
           sender: {
             _id: socket.userData._id,
             name: socket.userData.name,
@@ -343,6 +347,48 @@ function initChatSocket(io) {
     });
 
     // ────────────────────────────────────────────────────────────────────────
+    // Event: mark_delivered
+    // Mark all messages in a conversation as delivered for the caller.
+    // ────────────────────────────────────────────────────────────────────────
+    socket.on('mark_delivered', async ({ conversationId }, ack) => {
+      try {
+        if (!conversationId) return;
+
+        const conversation = await Conversation.findById(conversationId).select('participants');
+        if (!conversation) return;
+
+        const isParticipant = conversation.participants.some(
+          (p) => p.toString() === userId
+        );
+        if (!isParticipant) return;
+
+        const now = new Date();
+
+        const result = await Message.updateMany(
+          {
+            conversation: conversationId,
+            sender: { $ne: userId },
+            'deliveredTo.user': { $ne: userId },
+            isDeleted: false,
+          },
+          { $push: { deliveredTo: { user: userId, deliveredAt: now } } }
+        );
+
+        if (result.modifiedCount > 0) {
+          io.to(conversationId).emit('messages_delivered', {
+            conversationId,
+            userId,
+            deliveredAt: now,
+          });
+        }
+
+        if (typeof ack === 'function') ack({ success: true });
+      } catch (err) {
+        console.error('[SOCKET] mark_delivered error:', err);
+      }
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
     // Events: typing_start / typing_stop
     // Relay typing indicators to other participants only (not back to sender).
     //
@@ -381,6 +427,67 @@ function initChatSocket(io) {
         statuses[id] = userIsOnline(id);
       });
       ack({ statuses });
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Events: add_reaction / remove_reaction
+    // ────────────────────────────────────────────────────────────────────────
+    socket.on('add_reaction', async ({ messageId, reaction }) => {
+      try {
+        if (!messageId || !reaction) return;
+
+        const message = await Message.findById(messageId).populate('conversation');
+        if (!message || !message.conversation) return;
+
+        const isParticipant = message.conversation.participants.some(
+          (p) => p.toString() === userId
+        );
+        if (!isParticipant) return;
+
+        await Message.findByIdAndUpdate(messageId, {
+          $pull: { reactions: { user: userId } },
+        });
+
+        const updated = await Message.findByIdAndUpdate(
+          messageId,
+          { $push: { reactions: { user: userId, reaction } } },
+          { new: true }
+        );
+
+        io.to(message.conversation._id.toString()).emit('reaction_updated', {
+          messageId,
+          reactions: updated.reactions,
+        });
+      } catch (err) {
+        console.error('[SOCKET] add_reaction error:', err);
+      }
+    });
+
+    socket.on('remove_reaction', async ({ messageId }) => {
+      try {
+        if (!messageId) return;
+
+        const message = await Message.findById(messageId).populate('conversation');
+        if (!message || !message.conversation) return;
+
+        const isParticipant = message.conversation.participants.some(
+          (p) => p.toString() === userId
+        );
+        if (!isParticipant) return;
+
+        const updated = await Message.findByIdAndUpdate(
+          messageId,
+          { $pull: { reactions: { user: userId } } },
+          { new: true }
+        );
+
+        io.to(message.conversation._id.toString()).emit('reaction_updated', {
+          messageId,
+          reactions: updated.reactions,
+        });
+      } catch (err) {
+        console.error('[SOCKET] remove_reaction error:', err);
+      }
     });
 
     // ────────────────────────────────────────────────────────────────────────

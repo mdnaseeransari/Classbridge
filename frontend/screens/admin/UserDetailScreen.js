@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
 import * as adminApi from '../../services/adminApi';
@@ -43,6 +44,27 @@ export default function UserDetailScreen({ route, navigation }) {
   const handleToggleBan = async () => {
     if (!user) return;
     const actionText = user.isBanned ? 'unban' : 'ban';
+    
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm(`Are you sure you want to ${actionText} this user?`);
+      if (!confirm) return;
+      setActionLoading(true);
+      try {
+        if (user.isBanned) {
+          await adminApi.unbanUser(userId, note);
+        } else {
+          await adminApi.banUser(userId, note);
+        }
+        setNote('');
+        await fetchUserDetail();
+      } catch (err) {
+        alert(err?.response?.data?.error || `Failed to ${actionText} user.`);
+      } finally {
+        setActionLoading(false);
+      }
+      return;
+    }
+
     Alert.alert(
       `${actionText.toUpperCase()} User`,
       `Are you sure you want to ${actionText} this user?`,
@@ -77,16 +99,40 @@ export default function UserDetailScreen({ route, navigation }) {
     try {
       await adminApi.unlockUser(userId, note);
       setNote('');
-      Alert.alert('Success', 'User account unlocked successfully.');
+      if (Platform.OS === 'web') {
+        alert('User account unlocked successfully.');
+      } else {
+        Alert.alert('Success', 'User account unlocked successfully.');
+      }
       await fetchUserDetail();
     } catch (err) {
-      Alert.alert('Error', err?.response?.data?.error || 'Failed to unlock user.');
+      if (Platform.OS === 'web') {
+        alert(err?.response?.data?.error || 'Failed to unlock user.');
+      } else {
+        Alert.alert('Error', err?.response?.data?.error || 'Failed to unlock user.');
+      }
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleDelete = async () => {
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm('This action is irreversible and will permanently delete the user account. Proceed?');
+      if (!confirm) return;
+      setActionLoading(true);
+      try {
+        await adminApi.deleteUser(userId, note);
+        alert('User deleted successfully.');
+        navigation.goBack();
+      } catch (err) {
+        alert(err?.response?.data?.error || 'Failed to delete user.');
+      } finally {
+        setActionLoading(false);
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete User',
       'This action is irreversible and will permanently delete the user account. Proceed?',
@@ -206,7 +252,7 @@ export default function UserDetailScreen({ route, navigation }) {
 
         {/* Action Section */}
         <View style={styles.actions}>
-          {actionLoading && <ActivityIndicator color="#38bdf8" style={{ marginBottom: 12 }} />}
+          {actionLoading && <ActivityIndicator color="#2563eb" style={{ marginBottom: 12 }} />}
 
           <TouchableOpacity
             style={[styles.btn, user.isBanned ? styles.unbanBtn : styles.banBtn]}
@@ -250,56 +296,56 @@ export default function UserDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#0a0e1a' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#111827',
     paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#1e293b',
   },
-  backText: { color: '#38bdf8', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f8fafc' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
+  backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f1f5f9' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0e1a' },
   errorText: { color: '#ef4444', fontSize: 16, marginBottom: 16 },
-  backButton: { backgroundColor: '#1e293b', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  backButtonText: { color: '#f8fafc', fontWeight: '600' },
+  backButton: { backgroundColor: '#111827', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  backButtonText: { color: '#f1f5f9', fontWeight: '600' },
   body: { padding: 16, paddingBottom: 40 },
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
+    backgroundColor: '#111827',
+    borderRadius: 12,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1e293b',
     marginBottom: 16,
   },
-  name: { fontSize: 20, fontWeight: '800', color: '#f8fafc' },
-  roleText: { fontSize: 12, fontWeight: '700', color: '#38bdf8', marginTop: 4, marginBottom: 16 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  name: { fontSize: 20, fontWeight: '800', color: '#f1f5f9' },
+  roleText: { fontSize: 12, fontWeight: '700', color: '#2563eb', marginTop: 4, marginBottom: 16 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1e293b' },
   infoLabel: { color: '#64748b', fontSize: 14 },
-  infoValue: { color: '#f8fafc', fontSize: 14, fontWeight: '600' },
+  infoValue: { color: '#f1f5f9', fontSize: 14, fontWeight: '600' },
   noteContainer: { marginBottom: 20 },
   noteTitle: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 8 },
   noteInput: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
+    backgroundColor: '#111827',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1e293b',
     padding: 12,
-    color: '#f8fafc',
+    color: '#f1f5f9',
     fontSize: 14,
     minHeight: 60,
   },
   actions: { gap: 10 },
-  btn: { paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
+  btn: { paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  banBtn: { backgroundColor: '#ea580c' },
-  unbanBtn: { backgroundColor: '#16a34a' },
+  banBtn: { backgroundColor: '#ef4444' },
+  unbanBtn: { backgroundColor: '#10b981' },
   unlockBtn: { backgroundColor: '#2563eb' },
-  promoteBtn: { backgroundColor: '#8b5cf6' },
-  deleteBtn: { backgroundColor: '#dc2626' },
+  promoteBtn: { backgroundColor: '#2563eb' },
+  deleteBtn: { backgroundColor: '#ef4444' },
 });
