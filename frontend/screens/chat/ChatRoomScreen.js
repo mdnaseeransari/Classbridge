@@ -15,6 +15,9 @@ import {
   Modal,
   Animated,
   LayoutAnimation,
+  Image,
+  Linking,
+  Dimensions,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -23,6 +26,34 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
 const EMOJIS = ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'];
+
+/** Subtle dot-grid wallpaper rendered behind the chat messages */
+const WallpaperBackground = () => {
+  const DOT_SIZE = 2;
+  const SPACING = 22;
+  const COLS = 20;
+  const ROWS = 40;
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+      {Array.from({ length: ROWS }).map((_, row) =>
+        Array.from({ length: COLS }).map((__, col) => (
+          <View
+            key={`dot-${row}-${col}`}
+            style={{
+              position: 'absolute',
+              top: row * SPACING,
+              left: col * SPACING,
+              width: DOT_SIZE,
+              height: DOT_SIZE,
+              borderRadius: DOT_SIZE / 2,
+              backgroundColor: 'rgba(148, 163, 184, 0.08)',
+            }}
+          />
+        ))
+      )}
+    </View>
+  );
+};
 
 export default function ChatRoomScreen({ route, navigation, isInline }) {
   const { conversationId, title } = route.params;
@@ -55,6 +86,11 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
   const [searchBarVisible, setSearchBarVisible] = useState(false);
   const [searching, setSearching] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState({});
+  const [lastSeenMap, setLastSeenMap] = useState({});
+  const [sharedMediaVisible, setSharedMediaVisible] = useState(false);
+  const [sharedMediaTab, setSharedMediaTab] = useState('media'); // 'media' | 'docs' | 'links'
+  const [imageViewerUrl, setImageViewerUrl] = useState(null); // full-screen image viewer
+
 
   const typingTimeoutRef = useRef(null);
   const socketRef = useRef(null);
@@ -72,11 +108,11 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         params: { q: text },
       });
       setSearchResults(res.data.messages || []);
-    } catch (err) {
-      console.error('[CHAT_ROOM] Search error:', err);
-    } finally {
-      setSearching(false);
-    }
+      } catch (_err) {
+        // silent fail
+      } finally {
+        setSearching(false);
+      }
   };
 
   const toggleSearchBar = () => {
@@ -100,6 +136,20 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         const res = await api.get(`/chat/conversations/${conversationId}`);
         const convo = res.data.conversation;
         setConversation(convo);
+        // Seed online status and last seen from DB data immediately (no socket roundtrip needed)
+        if (convo.participants) {
+          const seedOnline = {};
+          const seedLastSeen = {};
+          convo.participants.forEach((p) => {
+            if (p._id !== user?._id) {
+              seedOnline[p._id] = !!p.isOnline;
+              if (p.lastSeenAt) seedLastSeen[p._id] = p.lastSeenAt;
+            }
+          });
+          setOnlineUsers((prev) => ({ ...prev, ...seedOnline }));
+          setLastSeenMap((prev) => ({ ...prev, ...seedLastSeen }));
+        }
+        // Also try socket ACK for live accuracy
         if (convo.type === 'direct' && socketRef.current) {
           const other = convo.participants.find((p) => p._id !== user?._id);
           if (other) {
@@ -107,11 +157,14 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
               if (resAck && resAck.statuses) {
                 setOnlineUsers((prev) => ({ ...prev, ...resAck.statuses }));
               }
+              if (resAck && resAck.lastSeenMap) {
+                setLastSeenMap((prev) => ({ ...prev, ...resAck.lastSeenMap }));
+              }
             });
           }
         }
-      } catch (err) {
-        console.error('[CHAT_ROOM] Error loading conversation details:', err);
+      } catch (_err) {
+        // silent fail
       }
     };
 
@@ -121,8 +174,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         const fetched = res.data.messages || [];
         setMessages([...fetched].reverse());
         setHasMore(fetched.length === 50);
-      } catch (err) {
-        console.error('[CHAT_ROOM] Error loading messages:', err);
+      } catch (_err) {
+        // silent fail
       } finally {
         setLoading(false);
       }
@@ -200,6 +253,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
                 ? {
                     ...m,
                     isDeleted: true,
+                    deletedBy: deletedInfo.deletedBy,
                     content: null,
                     fileUrl: null,
                     fileName: null,
@@ -262,8 +316,9 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       setOnlineUsers((prev) => ({ ...prev, [userId]: true }));
     };
 
-    const onUserOffline = ({ userId }) => {
+    const onUserOffline = ({ userId, lastSeenAt }) => {
       setOnlineUsers((prev) => ({ ...prev, [userId]: false }));
+      if (lastSeenAt) setLastSeenMap((prev) => ({ ...prev, [userId]: lastSeenAt }));
     };
 
     if (socketRef.current) {
@@ -310,8 +365,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         setPage(nextPage);
       }
       setHasMore(fetched.length === 50);
-    } catch (err) {
-      console.error('[CHAT_ROOM] Error loading older messages:', err);
+    } catch (_err) {
+      // silent fail
     } finally {
       setLoadingOlder(false);
     }
@@ -323,7 +378,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     setActionMenuVisible(true);
   };
 
-  const executeDeleteMsg = async (msgId) => {
+  const executeDeleteMsg = async (msgId, target = 'me') => {
+    // Trigger fade-out/scale animation for both deletion modes
     setAnimatingDeleteIds((prev) => {
       const next = new Set(prev);
       next.add(msgId);
@@ -332,21 +388,29 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
 
     setTimeout(() => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === msgId
-            ? {
-                ...m,
-                isDeleted: true,
-                content: null,
-                fileUrl: null,
-                fileName: null,
-                fileMimeType: null,
-                fileSizeBytes: null,
-              }
-            : m
-        )
-      );
+      if (target === 'me') {
+        // Completely remove locally
+        setMessages((prev) => prev.filter((m) => m._id !== msgId));
+      } else {
+        // Soft-delete transition for everyone
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === msgId
+              ? {
+                  ...m,
+                  isDeleted: true,
+                  deletedBy: user,
+                  content: null,
+                  fileUrl: null,
+                  fileName: null,
+                  fileMimeType: null,
+                  fileSizeBytes: null,
+                }
+              : m
+          )
+        );
+      }
+
       setAnimatingDeleteIds((prev) => {
         const next = new Set(prev);
         next.delete(msgId);
@@ -355,36 +419,66 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     }, 250);
 
     try {
-      await api.delete(`/chat/messages/${msgId}`);
-    } catch (err) {
-      if (Platform.OS === 'web') {
-        alert(err?.response?.data?.error || 'Failed to delete message.');
-      } else {
-        Alert.alert('Error', err?.response?.data?.error || 'Failed to delete message.');
-      }
+      await api.delete(`/chat/messages/${msgId}?target=${target}`);
+    } catch (_err) {
+      // silent fail
     }
   };
 
   const confirmDelete = (msgId) => {
+    const canDeleteForEveryone = true;
+
     if (Platform.OS === 'web') {
-      const confirmAction = window.confirm('Are you sure you want to delete this message?');
-      if (confirmAction) {
-        executeDeleteMsg(msgId);
+      if (canDeleteForEveryone) {
+        const forEveryone = window.confirm('Do you want to delete this message for everyone? (Click Cancel to delete for yourself only)');
+        if (forEveryone) {
+          executeDeleteMsg(msgId, 'everyone');
+        } else {
+          const forMe = window.confirm('Delete this message for yourself?');
+          if (forMe) {
+            executeDeleteMsg(msgId, 'me');
+          }
+        }
+      } else {
+        const forMe = window.confirm('Delete this message for yourself?');
+        if (forMe) {
+          executeDeleteMsg(msgId, 'me');
+        }
       }
       return;
     }
-    Alert.alert(
-      'Delete Message',
-      'Are you sure you want to delete this message?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => executeDeleteMsg(msgId),
-        },
-      ]
-    );
+
+    if (canDeleteForEveryone) {
+      Alert.alert(
+        'Delete Message',
+        'How do you want to delete this message?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete for Me',
+            onPress: () => executeDeleteMsg(msgId, 'me'),
+          },
+          {
+            text: 'Delete for Everyone',
+            style: 'destructive',
+            onPress: () => executeDeleteMsg(msgId, 'everyone'),
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Delete Message',
+        'Are you sure you want to delete this message for yourself?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete for Me',
+            style: 'destructive',
+            onPress: () => executeDeleteMsg(msgId, 'me'),
+          },
+        ]
+      );
+    }
   };
 
   const handleForwardSetup = async (item) => {
@@ -393,8 +487,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       const res = await api.get('/chat/conversations');
       setActiveConversations(res.data.conversations || []);
       setForwardModalVisible(true);
-    } catch (err) {
-      Alert.alert('Error', 'Failed to retrieve active conversations.');
+    } catch (_err) {
+      // silent fail
     }
   };
 
@@ -405,9 +499,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     setForwardingMessage(null);
     try {
       await api.post(`/chat/messages/${msgId}/forward`, { conversationId: targetConvoId });
-      Alert.alert('Success', 'Message forwarded successfully.');
-    } catch (err) {
-      Alert.alert('Forward Failed', err?.response?.data?.error || 'Failed to forward message.');
+    } catch (_err) {
+      // silent fail
     }
   };
 
@@ -427,8 +520,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       setInputText('');
       try {
         await api.patch(`/chat/messages/${msgId}`, { content: trimmed });
-      } catch (err) {
-        Alert.alert('Error', err?.response?.data?.error || 'Failed to edit message.');
+      } catch (_err) {
+        // silent fail
       }
       return;
     }
@@ -478,29 +571,14 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
   };
 
   const handleAttachmentPress = () => {
-    if (Platform.OS === 'web') {
-      setAttachmentMenuVisible(true);
-      return;
-    }
-    Alert.alert(
-      'Send Attachment',
-      'Select the attachment type:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Image / Video', onPress: pickImage },
-        { text: 'Document', onPress: pickDocument },
-      ]
-    );
+    setAttachmentMenuVisible(true);
   };
 
   const pickImage = async () => {
     try {
       if (Platform.OS !== 'web') {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permissionResult.granted) {
-          Alert.alert('Permission Denied', 'Permission to access camera roll is required.');
-          return;
-        }
+        if (!permissionResult.granted) return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -512,15 +590,11 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       if (result.canceled || !result.assets || result.assets.length === 0) return;
 
       const asset = result.assets[0];
-      if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
-        Alert.alert('File Too Large', 'Maximum file size permitted is 10 MB.');
-        return;
-      }
+      if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) return;
 
       await uploadFile(asset.uri, asset.fileName || 'image.jpg', asset.mimeType || 'image/jpeg');
-    } catch (err) {
-      console.error('[ATTACHMENT] Pick image error:', err);
-      Alert.alert('Error', 'Failed to pick image.');
+    } catch (_err) {
+      // silent fail
     }
   };
 
@@ -534,15 +608,11 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       if (result.canceled || !result.assets || result.assets.length === 0) return;
 
       const asset = result.assets[0];
-      if (asset.size && asset.size > 10 * 1024 * 1024) {
-        Alert.alert('File Too Large', 'Maximum file size permitted is 10 MB.');
-        return;
-      }
+      if (asset.size && asset.size > 10 * 1024 * 1024) return;
 
       await uploadFile(asset.uri, asset.name || 'document', asset.mimeType || 'application/octet-stream');
-    } catch (err) {
-      console.error('[ATTACHMENT] Pick document error:', err);
-      Alert.alert('Error', 'Failed to pick document.');
+    } catch (_err) {
+      // silent fail
     }
   };
 
@@ -567,9 +637,8 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
           'Content-Type': 'multipart/form-data',
         },
       });
-    } catch (err) {
-      console.error('[ATTACHMENT] Upload error:', err?.response?.data || err.message);
-      Alert.alert('Upload Failed', err?.response?.data?.error || 'Failed to upload attachment.');
+    } catch (_err) {
+      // silent fail
     } finally {
       setUploading(false);
     }
@@ -621,43 +690,19 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         reason: 'other',
         details: reason,
       });
-      if (Platform.OS === 'web') {
-        alert('Thank you. The administrators will review this message shortly.');
-      } else {
-        Alert.alert('Report Submitted', 'Thank you. The administrators will review this message shortly.');
-      }
-    } catch (err) {
-      if (Platform.OS === 'web') {
-        alert(err?.response?.data?.error || 'Failed to submit report.');
-      } else {
-        Alert.alert('Error', err?.response?.data?.error || 'Failed to submit report.');
-      }
+    } catch (_err) {
+      // silent fail
     }
   };
 
   const reportMessage = (msgId) => {
     if (Platform.OS === 'web') {
       const reason = window.prompt('Please state the reason for reporting this message:');
-      if (reason) {
-        executeReportMsg(msgId, reason);
-      }
+      if (reason) executeReportMsg(msgId, reason);
       return;
     }
-    Alert.prompt(
-      'Report Message',
-      'Please state the reason for reporting this message:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report',
-          onPress: (reason) => {
-            if (reason) {
-              executeReportMsg(msgId, reason);
-            }
-          },
-        },
-      ]
-    );
+    // On native, report with a generic reason (Alert.prompt not available on Android)
+    executeReportMsg(msgId, 'Reported by user');
   };
 
   const handleHeaderPress = () => {
@@ -667,6 +712,9 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       } else {
         navigation.navigate('GroupMemberList', { conversationId, groupName: title });
       }
+    } else {
+      // For direct chats, open shared media panel
+      setSharedMediaVisible(true);
     }
   };
 
@@ -712,18 +760,31 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     );
   };
 
-  const renderBubble = ({ item }) => {
+  const renderBubble = ({ item, index }) => {
     const isSelf = item.sender?._id === user?._id;
     const formattedTime = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const isDeleting = animatingDeleteIds.has(item._id);
 
+    // Grouped bubble: list is inverted so index 0 = newest
+    // prevMsg = message displayed BELOW this one (older in array = newer index)
+    // nextMsg = message displayed ABOVE this one (newer in array = older index)
+    const displayMessages = searchBarVisible && searchResults !== null ? searchResults : messages;
+    const prevMsg = displayMessages[index + 1]; // older in time (above visually)
+    const nextMsg = displayMessages[index - 1]; // newer in time (below visually)
+    const isSameSenderAsPrev = prevMsg && prevMsg.sender?._id === item.sender?._id && !prevMsg.isDeleted;
+    const isSameSenderAsNext = nextMsg && nextMsg.sender?._id === item.sender?._id && !nextMsg.isDeleted;
+    const isGroupedTop = isSameSenderAsPrev;    // has a message above from same sender
+    const isGroupedBottom = isSameSenderAsNext; // has a message below from same sender
+
     if (item.isDeleted) {
       return (
         <AnimatedBubbleWrapper isDeleting={isDeleting}>
-          <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft]}>
-            {isGroup && !isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
+          <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft, isGroupedBottom && { marginBottom: 2 }]}>
+            {isGroup && !isSelf && !isGroupedTop && <Text style={styles.senderName}>{item.sender?.name}</Text>}
             <View style={[styles.bubble, styles.bubbleDeleted]}>
-              <Text style={styles.textDeleted}>This message was deleted</Text>
+              <Text style={styles.textDeleted}>
+                This message was deleted by {item.deletedBy?._id === user?._id ? 'you' : (item.deletedBy?.name || 'someone')}
+              </Text>
               <View style={styles.bubbleFooter}>
                 <Text style={[styles.bubbleTime, { color: '#64748b' }]}>{formattedTime}</Text>
               </View>
@@ -733,17 +794,39 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       );
     }
 
+    // Compute grouped corner radii
+    const FULL = 16;
+    const FLAT = 4;
+    let bubbleGroupStyle = {};
+    if (isSelf) {
+      // Self: tail at bottom-right; flatten top-right when grouped top, flatten bottom-right when grouped bottom
+      bubbleGroupStyle = {
+        borderTopLeftRadius: FULL,
+        borderTopRightRadius: isGroupedTop ? FLAT : FULL,
+        borderBottomLeftRadius: FULL,
+        borderBottomRightRadius: isGroupedBottom ? FLAT : FLAT,
+      };
+    } else {
+      // Other: tail at bottom-left; flatten top-left when grouped top, flatten bottom-left when grouped bottom
+      bubbleGroupStyle = {
+        borderTopLeftRadius: isGroupedTop ? FLAT : FULL,
+        borderTopRightRadius: FULL,
+        borderBottomLeftRadius: isGroupedBottom ? FLAT : FLAT,
+        borderBottomRightRadius: FULL,
+      };
+    }
+
     return (
       <AnimatedBubbleWrapper isDeleting={isDeleting}>
-        <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft]}>
-          {isGroup && !isSelf && <Text style={styles.senderName}>{item.sender?.name}</Text>}
+        <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft, isGroupedBottom && { marginBottom: 2 }]}>
+          {isGroup && !isSelf && !isGroupedTop && <Text style={styles.senderName}>{item.sender?.name}</Text>}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity
               activeOpacity={0.9}
               {...getMessagePressProps(item)}
               style={{ flexShrink: 1 }}
             >
-              <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther]}>
+              <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther, bubbleGroupStyle]}>
             {item.forwardedFrom && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
                 <Ionicons name="share-social-outline" size={10} color={isSelf ? 'rgba(255, 255, 255, 0.7)' : '#64748b'} />
@@ -764,20 +847,59 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
               </View>
             )}
 
-            {item.type === 'file' ? (
-              <TouchableOpacity onPress={() => Alert.alert('Attachment Link', `File URL:\n${item.fileUrl}`)}>
-                <Text style={[styles.fileText, isSelf ? styles.textSelf : styles.textOther]}>
-                  📁 {item.fileName || 'Attachment'}
-                </Text>
-                {item.content && item.content !== item.fileName && (
-                  <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther, { marginTop: 4 }]}>
-                    {item.content}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            ) : (
+            {item.type === 'file' ? (() => {
+              const isImage = item.fileMimeType && item.fileMimeType.startsWith('image/');
+              if (isImage && item.fileUrl) {
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setImageViewerUrl(item.fileUrl)}
+                    style={styles.imageBubble}
+                  >
+                    <Image
+                      source={{ uri: item.fileUrl }}
+                      style={styles.imageBubbleImg}
+                      resizeMode="cover"
+                    />
+                    {item.content && item.content !== item.fileName && (
+                      <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther, { marginTop: 6 }]}>
+                        {item.content}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              }
+              // Non-image file — show download row
+              return (
+                <TouchableOpacity
+                  style={styles.fileRow}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (item.fileUrl) {
+                      Linking.openURL(item.fileUrl).catch(() => {});
+                    }
+                  }}
+                >
+                  <View style={[styles.fileIconBox, isSelf && { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
+                    <Ionicons name="document-outline" size={24} color={isSelf ? '#ffffff' : '#38bdf8'} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fileRowName, isSelf ? styles.textSelf : styles.textOther]} numberOfLines={2}>
+                      {item.fileName || 'Document'}
+                    </Text>
+                    {item.fileMimeType && (
+                      <Text style={[styles.fileRowMeta, isSelf ? { color: 'rgba(255,255,255,0.55)' } : {}]}>
+                        {item.fileMimeType.split('/')[1]?.toUpperCase() || 'FILE'}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="download-outline" size={20} color={isSelf ? 'rgba(255,255,255,0.7)' : '#64748b'} />
+                </TouchableOpacity>
+              );
+            })() : (
               <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther]}>{item.content}</Text>
             )}
+
 
             {/* Reactions badges */}
             {item.reactions && item.reactions.length > 0 && (
@@ -878,7 +1000,21 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
               </View>
             ) : (
               <Text style={styles.headerSubText}>
-                {!!onlineUsers[conversation?.participants?.find(p => p._id !== user?._id)?._id] ? 'Online' : 'Offline'}
+                {!isGroup && (() => {
+                  const otherId = conversation?.participants?.find(p => p._id !== user?._id)?._id;
+                  const isOtherOnline = !!onlineUsers[otherId];
+                  if (isOtherOnline) return 'Online';
+                  const lastSeen = lastSeenMap[otherId];
+                  if (!lastSeen) return 'Last seen: recently';
+                  const diff = Date.now() - new Date(lastSeen).getTime();
+                  const mins = Math.floor(diff / 60000);
+                  const hrs = Math.floor(diff / 3600000);
+                  const days = Math.floor(diff / 86400000);
+                  if (mins < 1) return 'Last seen: just now';
+                  if (mins < 60) return `Last seen: ${mins}m ago`;
+                  if (hrs < 24) return `Last seen: ${hrs}h ago`;
+                  return `Last seen: ${days}d ago`;
+                })()}
               </Text>
             )}
           </View>
@@ -910,19 +1046,23 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
           <ActivityIndicator size="large" color="#38bdf8" />
         </View>
       ) : (
-        <FlatList
-          ref={flatListRef}
-          data={searchBarVisible && searchResults !== null ? searchResults : messages}
-          keyExtractor={(item) => item._id}
-          renderItem={renderBubble}
-          inverted
-          onEndReached={loadOlderMessages}
-          onEndReachedThreshold={0.2}
-          ListFooterComponent={loadingOlder ? <ActivityIndicator color="#38bdf8" style={{ marginVertical: 10 }} /> : null}
-          contentContainerStyle={styles.listContent}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-        />
+        <View style={{ flex: 1, position: 'relative' }}>
+          <WallpaperBackground />
+          <FlatList
+            ref={flatListRef}
+            data={searchBarVisible && searchResults !== null ? searchResults : messages}
+            keyExtractor={(item) => item._id}
+            renderItem={renderBubble}
+            inverted
+            onEndReached={loadOlderMessages}
+            onEndReachedThreshold={0.2}
+            ListFooterComponent={loadingOlder ? <ActivityIndicator color="#38bdf8" style={{ marginVertical: 10 }} /> : null}
+            contentContainerStyle={styles.listContent}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            style={[styles.chatBackground, { backgroundColor: 'transparent' }]}
+          />
+        </View>
       )}
 
       {isTyping && <Text style={styles.typingIndicator}>typing...</Text>}
@@ -1104,7 +1244,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
               </TouchableOpacity>
             )}
 
-            {(selectedActionMessage?.sender?._id === user?._id || ['admin', 'superadmin'].includes(user?.role)) && (
+            {selectedActionMessage && !selectedActionMessage.isDeleted && (
               <TouchableOpacity
                 style={[styles.actionMenuBtn, { borderBottomColor: 'rgba(239,68,68,0.2)', flexDirection: 'row', alignItems: 'center', gap: 10 }]}
                 onPress={() => {
@@ -1206,7 +1346,227 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
           <Ionicons name="chevron-down" size={20} color="#ffffff" />
         </TouchableOpacity>
       )}
+
+      {/* ── Full-Screen Image Viewer ───────────────────────────────────── */}
+      <Modal
+        visible={!!imageViewerUrl}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setImageViewerUrl(null)}
+        statusBarTranslucent
+      >
+        <View style={styles.imageViewerOverlay}>
+          {/* Close button */}
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setImageViewerUrl(null)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="close" size={26} color="#ffffff" />
+          </TouchableOpacity>
+
+          {/* Image */}
+          {imageViewerUrl && (
+            <Image
+              source={{ uri: imageViewerUrl }}
+              style={styles.imageViewerImg}
+              resizeMode="contain"
+            />
+          )}
+
+          {/* Bottom actions */}
+          <View style={styles.imageViewerActions}>
+            <TouchableOpacity
+              style={styles.imageViewerBtn}
+              onPress={() => {
+                if (imageViewerUrl) {
+                  Linking.openURL(imageViewerUrl).catch(() => {});
+                }
+              }}
+            >
+              <Ionicons name="download-outline" size={20} color="#ffffff" />
+              <Text style={styles.imageViewerBtnText}>Download / Open</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Shared Media Panel ─────────────────────────────────────────── */}
+
+      <Modal
+        visible={sharedMediaVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSharedMediaVisible(false)}
+      >
+        <View style={styles.sharedMediaOverlay}>
+          <View style={styles.sharedMediaPanel}>
+            {/* Header */}
+            <View style={styles.sharedMediaHeader}>
+              <Text style={styles.sharedMediaTitle}>Shared Content</Text>
+              <TouchableOpacity onPress={() => setSharedMediaVisible(false)} style={{ padding: 6 }}>
+                <Ionicons name="close" size={22} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tabs */}
+            <View style={styles.sharedMediaTabs}>
+              {['media', 'docs', 'links'].map((tab) => {
+                const icons = { media: 'images-outline', docs: 'document-outline', links: 'link-outline' };
+                const labels = { media: 'Media', docs: 'Docs', links: 'Links' };
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.sharedMediaTabBtn, sharedMediaTab === tab && styles.sharedMediaTabActive]}
+                    onPress={() => setSharedMediaTab(tab)}
+                  >
+                    <Ionicons name={icons[tab]} size={16} color={sharedMediaTab === tab ? '#38bdf8' : '#64748b'} />
+                    <Text style={[styles.sharedMediaTabText, sharedMediaTab === tab && { color: '#38bdf8' }]}>
+                      {labels[tab]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Content */}
+            {(() => {
+              const allMsgs = messages.filter((m) => !m.isDeleted);
+              if (sharedMediaTab === 'media') {
+                // Images are file messages with image mimetypes
+                const mediaItems = allMsgs.filter(
+                  (m) => m.type === 'file' && m.fileMimeType && m.fileMimeType.startsWith('image/')
+                );
+                if (!mediaItems.length) {
+                  return (
+                    <View style={styles.sharedMediaEmpty}>
+                      <Ionicons name="images-outline" size={48} color="#1e293b" />
+                      <Text style={styles.sharedMediaEmptyText}>No media shared yet</Text>
+                    </View>
+                  );
+                }
+                return (
+                  <FlatList
+                    data={mediaItems}
+                    keyExtractor={(i) => i._id}
+                    numColumns={3}
+                    contentContainerStyle={{ padding: 4 }}
+                    renderItem={({ item: mediaMsg }) => (
+                      <TouchableOpacity
+                        style={styles.sharedMediaThumb}
+                        onPress={() => {
+                          setSharedMediaVisible(false);
+                          setTimeout(() => setImageViewerUrl(mediaMsg.fileUrl), 300);
+                        }}
+                      >
+                        <Image
+                          source={{ uri: mediaMsg.fileUrl }}
+                          style={[styles.sharedMediaThumb, { backgroundColor: '#182533' }]}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    )}
+                  />
+                );
+              }
+
+              if (sharedMediaTab === 'docs') {
+                const docItems = allMsgs.filter(
+                  (m) => m.type === 'file' && m.fileMimeType && !m.fileMimeType.startsWith('image/')
+                );
+                if (!docItems.length) {
+                  return (
+                    <View style={styles.sharedMediaEmpty}>
+                      <Ionicons name="document-outline" size={48} color="#1e293b" />
+                      <Text style={styles.sharedMediaEmptyText}>No documents shared yet</Text>
+                    </View>
+                  );
+                }
+                return (
+                  <FlatList
+                    data={docItems}
+                    keyExtractor={(i) => i._id}
+                    contentContainerStyle={{ padding: 12 }}
+                    renderItem={({ item: docMsg }) => (
+                      <TouchableOpacity
+                        style={styles.sharedDocRow}
+                        onPress={() => {
+                          if (docMsg.fileUrl) {
+                            Linking.openURL(docMsg.fileUrl).catch(() => {});
+                          }
+                        }}
+                      >
+                        <View style={styles.sharedDocIcon}>
+                          <Ionicons name="document-text-outline" size={22} color="#38bdf8" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sharedDocName} numberOfLines={1}>{docMsg.fileName || 'Document'}</Text>
+                          <Text style={styles.sharedDocMeta}>
+                            {docMsg.sender?.name} · {new Date(docMsg.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                        <Ionicons name="download-outline" size={18} color="#64748b" />
+                      </TouchableOpacity>
+                    )}
+                    ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: '#1e293b' }} />}
+                  />
+                );
+              }
+
+              if (sharedMediaTab === 'links') {
+                const urlRegex = /https?:\/\/[^\s]+/g;
+                const linkItems = [];
+                allMsgs.forEach((m) => {
+                  if (m.type === 'text' && m.content) {
+                    const found = m.content.match(urlRegex);
+                    found?.forEach((url) => linkItems.push({ _id: `${m._id}-${url}`, url, sender: m.sender, createdAt: m.createdAt }));
+                  }
+                });
+                if (!linkItems.length) {
+                  return (
+                    <View style={styles.sharedMediaEmpty}>
+                      <Ionicons name="link-outline" size={48} color="#1e293b" />
+                      <Text style={styles.sharedMediaEmptyText}>No links shared yet</Text>
+                    </View>
+                  );
+                }
+                return (
+                  <FlatList
+                    data={linkItems}
+                    keyExtractor={(i) => i._id}
+                    contentContainerStyle={{ padding: 12 }}
+                    renderItem={({ item: linkMsg }) => (
+                      <TouchableOpacity
+                        style={styles.sharedDocRow}
+                        onPress={() => {
+                          if (linkMsg.url) {
+                            Linking.openURL(linkMsg.url).catch(() => {});
+                          }
+                        }}
+                      >
+                        <View style={[styles.sharedDocIcon, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+                          <Ionicons name="globe-outline" size={22} color="#10b981" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sharedDocName} numberOfLines={1}>{linkMsg.url}</Text>
+                          <Text style={styles.sharedDocMeta}>
+                            {linkMsg.sender?.name} · {new Date(linkMsg.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: '#1e293b' }} />}
+                  />
+                );
+              }
+
+              return null;
+            })()}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
+
   );
 }
 
@@ -1227,11 +1587,16 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '800', color: '#f1f5f9', flex: 1, textAlign: 'center', marginHorizontal: 8 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContent: { paddingHorizontal: 14, paddingVertical: 10 },
-  bubbleWrapper: { marginBottom: 12, maxWidth: '80%' },
+  bubbleWrapper: { marginBottom: 10, maxWidth: '80%' },
   bubbleLeft: { alignSelf: 'flex-start' },
   bubbleRight: { alignSelf: 'flex-end' },
   senderName: { fontSize: 11, color: '#64748b', marginBottom: 2, marginLeft: 4 },
   bubble: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8, position: 'relative' },
+  chatBackground: {
+    backgroundColor: '#0e1621',
+    // Subtle dot-grid overlay achieved via opacity on the FlatList itself
+    // (actual pattern is set in container background)
+  },
   bubbleSelf: {
     backgroundColor: '#2b5278',
     borderTopLeftRadius: 16,
@@ -1275,6 +1640,90 @@ const styles = StyleSheet.create({
   emojiText: { fontSize: 24 },
   headerSub: { fontSize: 10, color: '#64748b', marginTop: 2, fontWeight: '600' },
   fileText: { fontSize: 15, fontWeight: 'bold', textDecorationLine: 'underline' },
+  // Image bubble in chat
+  imageBubble: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginVertical: 2,
+  },
+  imageBubbleImg: {
+    width: 220,
+    height: 180,
+    borderRadius: 10,
+  },
+  // Non-image file row
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+    minWidth: 180,
+    maxWidth: 240,
+  },
+  fileIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fileRowName: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  fileRowMeta: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  // Full-screen image viewer
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerClose: {
+    position: 'absolute',
+    top: 52,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  imageViewerImg: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.75,
+  },
+  imageViewerActions: {
+    position: 'absolute',
+    bottom: 50,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  imageViewerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  imageViewerBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
   uploadingBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111827', paddingVertical: 8, paddingHorizontal: 16, gap: 10, borderTopWidth: 1, borderTopColor: '#1e293b' },
   uploadingText: { color: '#64748b', fontSize: 12, fontWeight: '700' },
   bubbleFooter: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 },
@@ -1421,4 +1870,98 @@ const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 9999,
   },
+  // ── Shared Media Panel ────────────────────────────────────────────────────
+  sharedMediaOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  sharedMediaPanel: {
+    backgroundColor: '#111827',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '75%',
+    borderTopWidth: 1,
+    borderColor: '#1e293b',
+  },
+  sharedMediaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  sharedMediaTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#f1f5f9',
+  },
+  sharedMediaTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  sharedMediaTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  sharedMediaTabActive: {
+    borderBottomColor: '#38bdf8',
+  },
+  sharedMediaTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  sharedMediaEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sharedMediaEmptyText: {
+    color: '#334155',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sharedMediaThumb: {
+    flex: 1,
+    margin: 2,
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  sharedDocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  sharedDocIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sharedDocName: {
+    fontSize: 14,
+    color: '#f1f5f9',
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  sharedDocMeta: {
+    fontSize: 11,
+    color: '#64748b',
+  },
 });
+

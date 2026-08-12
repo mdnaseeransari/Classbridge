@@ -73,9 +73,16 @@ export default function AdminDashboardScreen({ navigation }) {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Admin Portal</Text>
-          <Text style={styles.headerSub}>
-            {isSuperAdmin ? '⭐ Super Admin' : '🛡 Administrator'} · {user?.name}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <Ionicons
+              name={isSuperAdmin ? 'star' : 'shield-checkmark'}
+              size={14}
+              color={isSuperAdmin ? '#fbbf24' : '#3b82f6'}
+            />
+            <Text style={[styles.headerSub, { marginTop: 0 }]}>
+              {isSuperAdmin ? 'Super Admin' : 'Administrator'} · {user?.name}
+            </Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
           <Text style={styles.logoutText}>Log Out</Text>

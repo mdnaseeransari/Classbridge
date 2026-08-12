@@ -114,7 +114,15 @@ function initChatSocket(io) {
     })();
 
     // Broadcast to everyone that this user is now online
-    socket.broadcast.emit('user_online', { userId });
+    (async () => {
+      try {
+        await User.findByIdAndUpdate(userId, { isOnline: true });
+        socket.broadcast.emit('user_status_changed', { userId, isOnline: true, lastSeenAt: null });
+        socket.broadcast.emit('user_online', { userId });
+      } catch (err) {
+        console.error('[SOCKET] Error updating user online status:', err);
+      }
+    })();
 
     // ────────────────────────────────────────────────────────────────────────
     // Event: join_conversation
@@ -420,13 +428,22 @@ function initChatSocket(io) {
     // Payload: { userIds: string[] }
     // Emits:   callback({ statuses: { [userId]: boolean } })
     // ────────────────────────────────────────────────────────────────────────
-    socket.on('get_online_status', ({ userIds } = {}, ack) => {
+    socket.on('get_online_status', async ({ userIds } = {}, ack) => {
       if (!Array.isArray(userIds) || typeof ack !== 'function') return;
       const statuses = {};
+      const lastSeenMap = {};
+      // Look up lastSeenAt from DB for users that are offline
+      const offlineIds = userIds.filter((id) => !userIsOnline(id));
+      try {
+        const dbUsers = await User.find({ _id: { $in: offlineIds } }).select('_id lastSeenAt');
+        dbUsers.forEach((u) => {
+          if (u.lastSeenAt) lastSeenMap[u._id.toString()] = u.lastSeenAt;
+        });
+      } catch { /* non-critical */ }
       userIds.forEach((id) => {
         statuses[id] = userIsOnline(id);
       });
-      ack({ statuses });
+      ack({ statuses, lastSeenMap });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -500,7 +517,16 @@ function initChatSocket(io) {
         // Only mark offline when ALL sockets for this user are gone
         if (sockets.size === 0) {
           onlineUsers.delete(userId);
-          socket.broadcast.emit('user_offline', { userId });
+          const now = new Date();
+          (async () => {
+            try {
+              await User.findByIdAndUpdate(userId, { isOnline: false, lastSeenAt: now });
+              socket.broadcast.emit('user_status_changed', { userId, isOnline: false, lastSeenAt: now });
+              socket.broadcast.emit('user_offline', { userId, lastSeenAt: now });
+            } catch (err) {
+              console.error('[SOCKET] Error updating user offline status:', err);
+            }
+          })();
         }
       }
     });

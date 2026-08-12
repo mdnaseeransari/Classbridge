@@ -95,6 +95,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
+    lastSeenAt: {
+      type: Date,
+      default: Date.now,
+    },
 
     // Set to true when an admin/superadmin explicitly bans the user.
     // Separate from isLocked (login lockout) — ban is a deliberate admin action,

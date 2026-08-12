@@ -32,8 +32,8 @@ function canDirectChat(roleA, roleB) {
  */
 function senderProjection(callerRole) {
   return isAdmin(callerRole)
-    ? 'name role email phone subject classGrade'       // admin sees phone & details
-    : 'name role subject classGrade';                  // teacher/student sees no phone or email
+    ? 'name role email phone subject classGrade isOnline lastSeenAt'       // admin sees phone & details
+    : 'name role subject classGrade isOnline lastSeenAt';                  // teacher/student sees no phone or email
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -237,11 +237,12 @@ async function getMessages(req, res) {
 
     // Fetch newest pages first (desc), then reverse for chronological display
     const [rawMessages, total] = await Promise.all([
-      Message.find({ conversation: req.params.id })
+      Message.find({ conversation: req.params.id, deletedFor: { $ne: callerId } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(PAGE_SIZE)
         .populate('sender', senderProjection(callerRole))
+        .populate('deletedBy', senderProjection(callerRole))
         .populate({
           path: 'replyTo',
           select: '_id content sender type fileName fileUrl',
@@ -251,7 +252,7 @@ async function getMessages(req, res) {
           },
         })
         .lean(),
-      Message.countDocuments({ conversation: req.params.id }),
+      Message.countDocuments({ conversation: req.params.id, deletedFor: { $ne: callerId } }),
     ]);
 
     // Reverse so the page is oldest-first (natural chat display order)
@@ -950,6 +951,7 @@ async function deleteMessage(req, res) {
     const callerId = req.user.id;
     const callerRole = req.user.role;
     const { id } = req.params;
+    const { target = 'me' } = req.query;
 
     const message = await Message.findById(id);
     if (!message) {
@@ -960,29 +962,53 @@ async function deleteMessage(req, res) {
       return res.status(400).json({ error: 'Message is already deleted.' });
     }
 
-    const isOwner = message.sender.toString() === callerId;
-    const isUserAdmin = ['admin', 'superadmin'].includes(callerRole);
-
-    if (!isOwner && !isUserAdmin) {
-      return res.status(403).json({ error: 'You are not authorized to delete this message.' });
+    const conversation = await Conversation.findById(message.conversation);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found.' });
     }
 
-    message.isDeleted = true;
-    message.deletedAt = new Date();
-    message.content = null;
-    message.fileUrl = null;
-    message.fileName = null;
-    message.fileMimeType = null;
-    message.fileSizeBytes = null;
-    await message.save();
+    const isParticipant = conversation.participants.some(
+      (p) => p.toString() === callerId
+    );
 
-    // Socket broadcast
-    const io = getIO();
-    if (io) {
-      io.to(message.conversation.toString()).emit('message_deleted', {
-        _id: message._id,
-        conversation: message.conversation,
-      });
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'You are not a participant in this conversation.' });
+    }
+
+    const isOwner = message.sender.toString() === callerId;
+    const isUserAdmin = ['admin', 'superadmin'].includes(callerRole);
+    const isDirectDM = conversation.type === 'direct';
+    const isGroupCreator = conversation.type === 'group' && conversation.createdBy && conversation.createdBy.toString() === callerId;
+
+    if (target === 'everyone') {
+      message.isDeleted = true;
+      message.deletedAt = new Date();
+      message.deletedBy = callerId;
+      message.content = null;
+      message.fileUrl = null;
+      message.fileName = null;
+      message.fileMimeType = null;
+      message.fileSizeBytes = null;
+      await message.save();
+
+      // Socket broadcast with deletedBy populated
+      const io = getIO();
+      if (io) {
+        const populatedMsg = await Message.findById(message._id)
+          .populate('deletedBy', senderProjection(callerRole));
+
+        io.to(message.conversation.toString()).emit('message_deleted', {
+          _id: message._id,
+          conversation: message.conversation,
+          deletedBy: populatedMsg?.deletedBy || null,
+        });
+      }
+    } else {
+      // Delete just for me
+      if (!message.deletedFor.includes(callerId)) {
+        message.deletedFor.push(callerId);
+        await message.save();
+      }
     }
 
     return res.status(200).json({ message: 'Message deleted successfully.' });

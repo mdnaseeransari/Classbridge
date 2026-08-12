@@ -75,6 +75,17 @@ const messageSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    deletedFor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
 
     // Edit indicator fields
     isEdited: {

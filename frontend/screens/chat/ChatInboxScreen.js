@@ -46,6 +46,16 @@ export default function ChatInboxScreen({ navigation }) {
       console.log('[DEBUG_INBOX] Raw Conversations:', JSON.stringify(convos, null, 2));
       setConversations(convos);
 
+      const initialOnlineMap = {};
+      convos.forEach((c) => {
+        c.participants?.forEach((p) => {
+          if (p._id !== user?._id) {
+            initialOnlineMap[p._id] = !!p.isOnline;
+          }
+        });
+      });
+      setOnlineUsers((prev) => ({ ...prev, ...initialOnlineMap }));
+
       // Collect user IDs to query initial online status
       const socketInstance = getSocket();
       if (socketInstance && socketInstance.connected) {
