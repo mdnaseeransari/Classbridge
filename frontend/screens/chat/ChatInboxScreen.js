@@ -5,11 +5,10 @@ import {
   View,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
+  TextInput,
   RefreshControl,
   StatusBar,
   Platform,
-  Alert,
   Modal,
   useWindowDimensions,
 } from 'react-native';
@@ -19,6 +18,10 @@ import api from '../../services/api';
 import { connectSocket, getSocket } from '../../services/socket';
 import ChatRoomScreen from './ChatRoomScreen';
 import { Ionicons } from '@expo/vector-icons';
+
+import Avatar from '../../components/ui/Avatar';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 export default function ChatInboxScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -39,11 +42,14 @@ export default function ChatInboxScreen({ navigation }) {
   const [selectedConvoId, setSelectedConvoId] = useState(null);
   const [selectedConvoTitle, setSelectedConvoTitle] = useState('');
 
+  // Search state
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const fetchConversations = async () => {
     try {
       const res = await api.get('/chat/conversations', { params: { archived: showArchived } });
       const convos = res.data.conversations || [];
-      console.log('[DEBUG_INBOX] Raw Conversations:', JSON.stringify(convos, null, 2));
       setConversations(convos);
 
       const initialOnlineMap = {};
@@ -56,7 +62,6 @@ export default function ChatInboxScreen({ navigation }) {
       });
       setOnlineUsers((prev) => ({ ...prev, ...initialOnlineMap }));
 
-      // Collect user IDs to query initial online status
       const socketInstance = getSocket();
       if (socketInstance && socketInstance.connected) {
         const otherIds = convos
@@ -75,28 +80,15 @@ export default function ChatInboxScreen({ navigation }) {
           });
         }
       }
-    } catch (err) {
-      console.error('[CHAT_INBOX] Error fetching conversations:', err);
+    } catch (_err) {
+      // silent fail
     }
   };
 
-  // Connect socket and listen to events when screen mounts
   useEffect(() => {
-    // ── Named handlers so we can remove exactly these listeners later ────────
-    // Using .off(eventName) without a fn reference removes ALL listeners for
-    // that event, which would clobber ChatRoomScreen's own message_received
-    // handler if both screens are in the stack simultaneously.
-
     const onMessageReceived = (msg) => {
-      console.log('[INBOX-LISTENER-ALIVE]', Date.now());
-      // DIAGNOSTIC — remove once confirmed working
-      console.log('[INBOX] message_received fired. msg.conversation:', msg.conversation,
-        '| type:', typeof msg.conversation);
-
-      // Update the matching conversation in-place — no HTTP round-trip needed.
-      // msg fields: { _id, conversation (id string), content, type, createdAt, sender }
-      setConversations(prev => {
-        const idx = prev.findIndex(c => c._id === msg.conversation);
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c._id === msg.conversation);
         if (idx === -1) return prev;
         const updated = {
           ...prev[idx],
@@ -108,9 +100,10 @@ export default function ChatInboxScreen({ navigation }) {
             createdAt: msg.createdAt,
           },
           lastActivityAt: msg.createdAt,
-          unreadCount: msg.sender?._id !== user?._id 
-            ? (prev[idx].unreadCount || 0) + 1 
-            : prev[idx].unreadCount || 0,
+          unreadCount:
+            msg.sender?._id !== user?._id
+              ? (prev[idx].unreadCount || 0) + 1
+              : prev[idx].unreadCount || 0,
         };
         const newList = [...prev];
         newList.splice(idx, 1);
@@ -119,11 +112,8 @@ export default function ChatInboxScreen({ navigation }) {
     };
 
     const onMessagesRead = ({ conversationId }) => {
-      // Clear unread count for the conversation that was read
       setConversations((prev) =>
-        prev.map((c) =>
-          c._id === conversationId ? { ...c, unreadCount: 0 } : c
-        )
+        prev.map((c) => (c._id === conversationId ? { ...c, unreadCount: 0 } : c))
       );
     };
 
@@ -139,8 +129,6 @@ export default function ChatInboxScreen({ navigation }) {
 
     const attachListeners = () => {
       if (!socketInstance) return;
-      console.log('[INBOX] Attaching socket listeners. socket.id:', socketInstance.id,
-        '| connected:', socketInstance.connected);
       socketInstance.off('message_received', onMessageReceived);
       socketInstance.on('message_received', onMessageReceived);
       socketInstance.off('messages_read', onMessagesRead);
@@ -175,10 +163,9 @@ export default function ChatInboxScreen({ navigation }) {
         s.off('messages_read', onMessagesRead);
         s.off('user_online', onUserOnline);
         s.off('user_offline', onUserOffline);
-        s.off('connect_error');
       }
     };
-  }, [user?._id]); // re-run if user changes (e.g. after login/logout cycle)
+  }, [user?._id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -194,9 +181,6 @@ export default function ChatInboxScreen({ navigation }) {
   };
 
   const handleCreateChat = () => {
-    // Navigate to select recipient.
-    // getParent() is needed when this screen is mounted inside a Tab (AdminTabNavigator);
-    // the Tab's navigation prop does not reach stack screens in the parent navigator.
     rootNav().navigate('NewChatSelection');
   };
 
@@ -216,8 +200,8 @@ export default function ChatInboxScreen({ navigation }) {
         await api.post(`/chat/conversations/${convoId}/pin`);
       }
       fetchConversations();
-    } catch (err) {
-      console.error('[INBOX] Error toggling pin:', err);
+    } catch (_err) {
+      // silent fail
     }
   };
 
@@ -229,8 +213,8 @@ export default function ChatInboxScreen({ navigation }) {
         await api.post(`/chat/conversations/${convoId}/archive`);
       }
       fetchConversations();
-    } catch (err) {
-      console.error('[INBOX] Error toggling archive:', err);
+    } catch (_err) {
+      // silent fail
     }
   };
 
@@ -242,8 +226,8 @@ export default function ChatInboxScreen({ navigation }) {
         await api.post(`/chat/conversations/${convoId}/mute`);
       }
       fetchConversations();
-    } catch (err) {
-      console.error('[INBOX] Error toggling mute:', err);
+    } catch (_err) {
+      // silent fail
     }
   };
 
@@ -251,6 +235,16 @@ export default function ChatInboxScreen({ navigation }) {
     setSelectedConvo(item);
     setActionMenuVisible(true);
   };
+
+  const filteredConversations = conversations.filter((c) => {
+    if (!searchQuery.trim()) return true;
+    let title = c.name || 'Group Chat';
+    if (c.type === 'direct') {
+      const other = c.participants.find((p) => p._id !== user?._id);
+      title = other?.name || 'Chat';
+    }
+    return title.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   const renderItem = ({ item }) => {
     let title = item.name || 'Group Chat';
@@ -264,25 +258,9 @@ export default function ChatInboxScreen({ navigation }) {
     }
 
     const unreadCount = item.unreadCount || 0;
-
     const formattedTime = item.lastActivityAt
       ? new Date(item.lastActivityAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '';
-
-    let avatarBgColor = 'rgba(37, 99, 235, 0.1)';
-    let avatarTextColor = '#2563eb';
-    if (item.type === 'direct' && otherParticipant) {
-      if (otherParticipant.role === 'teacher') {
-        avatarBgColor = 'rgba(16, 185, 129, 0.1)';
-        avatarTextColor = '#10b981';
-      } else if (otherParticipant.role === 'student') {
-        avatarBgColor = 'rgba(124, 58, 237, 0.1)';
-        avatarTextColor = '#7c3aed';
-      }
-    } else {
-      avatarBgColor = 'rgba(239, 68, 68, 0.1)';
-      avatarTextColor = '#ef4444';
-    }
 
     const getPressProps = (convo) => {
       if (Platform.OS === 'web') {
@@ -290,7 +268,7 @@ export default function ChatInboxScreen({ navigation }) {
           onContextMenu: (e) => {
             e.preventDefault();
             handleLongPress(convo);
-          }
+          },
         };
       }
       return {
@@ -299,59 +277,63 @@ export default function ChatInboxScreen({ navigation }) {
     };
 
     return (
-      <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#1e293b' }}>
-        <TouchableOpacity
-          style={[styles.item, { flex: 1, borderBottomWidth: 0 }]}
-          activeOpacity={0.75}
-          onPress={() => {
-            if (isLargeScreen) {
-              setSelectedConvoId(item._id);
-              setSelectedConvoTitle(title);
-            } else {
-              rootNav().navigate('ChatRoom', { conversationId: item._id, title });
-            }
-          }}
-          {...getPressProps(item)}
-        >
-          <View style={styles.avatarContainer}>
-            <View style={[styles.avatar, { backgroundColor: avatarBgColor }]}>
-              <Text style={[styles.avatarText, { color: avatarTextColor }]}>
-                {title[0]?.toUpperCase() || '?'}
+      <TouchableOpacity
+        style={styles.itemRow}
+        activeOpacity={0.75}
+        onPress={() => {
+          if (isLargeScreen) {
+            setSelectedConvoId(item._id);
+            setSelectedConvoTitle(title);
+          } else {
+            rootNav().navigate('ChatRoom', { conversationId: item._id, title });
+          }
+        }}
+        {...getPressProps(item)}
+      >
+        <Avatar
+          name={title}
+          role={otherParticipant?.role || 'student'}
+          size="medium"
+          showOnline={item.type === 'direct' && isOnline}
+        />
+
+        <View style={styles.details}>
+          <View style={styles.topRow}>
+            <View style={styles.nameBox}>
+              <Text style={styles.nameText} numberOfLines={1}>
+                {title}
               </Text>
+              {item.isPinned && <Ionicons name="pin" size={13} color="#ffa726" />}
+              {item.isMuted && <Ionicons name="volume-mute" size={13} color="#708499" />}
             </View>
-            {item.type === 'direct' && isOnline && <View style={styles.onlineDot} />}
+            <Text style={styles.timeText}>{formattedTime}</Text>
           </View>
-  
-          <View style={styles.details}>
-            <View style={styles.row}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {title}
-                </Text>
-                {item.isPinned && <Ionicons name="pin" size={14} color="#fbbf24" />}
-                {item.isMuted && <Ionicons name="volume-mute" size={14} color="#64748b" />}
+
+          <View style={styles.bottomRow}>
+            <Text style={styles.previewText} numberOfLines={1}>
+              {item.lastMessage?.content || (item.lastMessage?.type === 'file' ? '📁 Attachment' : 'No messages yet')}
+            </Text>
+            {unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
               </View>
-              <Text style={styles.time}>{formattedTime}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.preview} numberOfLines={1}>
-                {item.lastMessage?.content || 'No messages yet'}
-              </Text>
-              {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount}</Text>
-                </View>
-              )}
-            </View>
+            )}
           </View>
-        </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
-          onPress={() => handleLongPress(item)}
-          style={{ paddingHorizontal: 16, paddingVertical: 20, justifyContent: 'center' }}
+          style={styles.rowActionBtn}
+          onPress={(e) => {
+            if (e && e.stopPropagation) {
+              e.stopPropagation();
+            }
+            handleLongPress(item);
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="ellipsis-vertical" size={20} color="#64748b" />
+          <Ionicons name="ellipsis-vertical" size={16} color="#708499" />
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -359,67 +341,88 @@ export default function ChatInboxScreen({ navigation }) {
 
   const renderInboxContent = () => {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0a0e1a' }}>
+      <View style={styles.inboxRoot}>
+        {/* Telegram Header */}
         <View style={styles.header}>
-          {showArchived ? (
-            <TouchableOpacity onPress={() => setShowArchived(false)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="arrow-back" size={20} color="#2563eb" />
-              <Text style={styles.backText}>Inbox</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={styles.headerTitle}>Messages</Text>
-          )}
-          
-          {showArchived ? (
-            <Text style={styles.headerTitle}>Archived</Text>
-          ) : (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity style={[styles.newChatBtn, { backgroundColor: '#111827', borderWidth: 1, borderColor: '#1e293b' }]} onPress={handleJoinGroup}>
-                <Text style={[styles.newChatBtnText, { color: '#2563eb' }]}>Join Group</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.newChatBtn} onPress={handleCreateChat}>
-                <Text style={styles.newChatBtnText}>＋ New</Text>
+          {isSearchMode ? (
+            <View style={styles.searchBarContainer}>
+              <Ionicons name="search" size={18} color="#708499" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search..."
+                placeholderTextColor="#708499"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+              <TouchableOpacity onPress={() => { setIsSearchMode(false); setSearchQuery(''); }}>
+                <Ionicons name="close" size={20} color="#708499" />
               </TouchableOpacity>
             </View>
+          ) : (
+            <>
+              {showArchived ? (
+                <TouchableOpacity onPress={() => setShowArchived(false)} style={styles.backBtn}>
+                  <Ionicons name="arrow-back" size={22} color="#ffffff" />
+                  <Text style={styles.headerTitle}>Archived</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={{ padding: 4 }}>
+                    <Ionicons name="menu" size={24} color="#ffffff" />
+                  </TouchableOpacity>
+                  <Text style={styles.headerTitle}>ClassBridge</Text>
+                </View>
+              )}
+
+              <View style={styles.headerRightActions}>
+                <TouchableOpacity onPress={() => setIsSearchMode(true)} style={styles.iconBtn}>
+                  <Ionicons name="search" size={20} color="#ffffff" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleCreateChat} style={styles.iconBtn}>
+                  <Ionicons name="create-outline" size={22} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            </>
           )}
         </View>
 
+        {/* Admin thin banner */}
         {isAdmin && !showArchived && (
           <View style={styles.adminBar}>
-            <Text style={styles.adminBarText}>Group Administration:</Text>
-            <TouchableOpacity style={styles.adminBarBtn} onPress={handleCreateGroup}>
-              <Text style={styles.adminBarBtnText}>＋ Create Group Chat</Text>
-            </TouchableOpacity>
+            <Text style={styles.adminBarTitle}>Group Controls</Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity onPress={handleJoinGroup}>
+                <Text style={styles.adminBarBtnText}>Join Link</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleCreateGroup}>
+                <Text style={styles.adminBarBtnText}>+ Create Group</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
+        {/* Archived list row link */}
         {!showArchived && (
-          <TouchableOpacity
-            style={styles.archiveHeaderRow}
-            onPress={() => setShowArchived(true)}
-          >
-            <Ionicons name="archive" size={18} color="#2563eb" style={{ marginRight: 8 }} />
+          <TouchableOpacity style={styles.archiveHeaderRow} onPress={() => setShowArchived(true)}>
+            <Ionicons name="archive-outline" size={18} color="#5288c1" style={{ marginRight: 10 }} />
             <Text style={styles.archiveHeaderText}>Archived Conversations</Text>
           </TouchableOpacity>
         )}
 
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#2563eb" />
-          </View>
+          <LoadingScreen />
         ) : (
           <FlatList
-            data={conversations}
+            data={filteredConversations}
             keyExtractor={(item) => item._id}
             extraData={{ conversations, onlineUsers }}
             renderItem={renderItem}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#5288c1" />
             }
             ListEmptyComponent={
-              <View style={styles.center}>
-                <Text style={styles.emptyText}>No conversations yet.</Text>
-              </View>
+              <EmptyState title="No conversations yet" subtitle="Start a new message to begin chatting." />
             }
             contentContainerStyle={{ paddingBottom: 40 }}
           />
@@ -430,15 +433,13 @@ export default function ChatInboxScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0e1a" />
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
       {isLargeScreen ? (
         <View style={{ flex: 1, flexDirection: 'row' }}>
-          {/* Left Pane: Inbox List */}
-          <View style={{ width: 350, borderRightWidth: 1, borderRightColor: '#1e293b' }}>
+          <View style={{ width: 350, borderRightWidth: 1, borderRightColor: '#0e1621' }}>
             {renderInboxContent()}
           </View>
-          {/* Right Pane: Chat Room */}
-          <View style={{ flex: 1, backgroundColor: '#0e1621' }}>
+          <View style={{ flex: 1, backgroundColor: '#17212b' }}>
             {selectedConvoId ? (
               <ChatRoomScreen
                 key={selectedConvoId}
@@ -448,7 +449,7 @@ export default function ChatInboxScreen({ navigation }) {
               />
             ) : (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#64748b', fontSize: 16 }}>Select a conversation to start chatting</Text>
+                <Text style={{ color: '#708499', fontSize: 16 }}>Select a conversation to start chatting</Text>
               </View>
             )}
           </View>
@@ -457,7 +458,7 @@ export default function ChatInboxScreen({ navigation }) {
         renderInboxContent()
       )}
 
-      {/* Conversation Action Sheet Modal */}
+      {/* Action Menu Sheet */}
       <Modal
         visible={actionMenuVisible}
         transparent={true}
@@ -466,52 +467,52 @@ export default function ChatInboxScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={[styles.modalTitle, { marginBottom: 12 }]}>Conversation Options</Text>
-            
+            <Text style={styles.modalTitle}>Options</Text>
+
             <TouchableOpacity
-              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
+              style={styles.actionMenuBtn}
               onPress={() => {
                 setActionMenuVisible(false);
                 togglePin(selectedConvo?._id, selectedConvo?.isPinned);
               }}
             >
-              <Ionicons name={selectedConvo?.isPinned ? 'pin' : 'pin-outline'} size={18} color="#2563eb" />
+              <Ionicons name={selectedConvo?.isPinned ? 'pin' : 'pin-outline'} size={18} color="#5288c1" />
               <Text style={styles.actionMenuBtnText}>
                 {selectedConvo?.isPinned ? 'Unpin Chat' : 'Pin Chat'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
+              style={styles.actionMenuBtn}
               onPress={() => {
                 setActionMenuVisible(false);
                 toggleArchive(selectedConvo?._id, selectedConvo?.isArchived);
               }}
             >
-              <Ionicons name={selectedConvo?.isArchived ? 'archive' : 'archive-outline'} size={18} color="#2563eb" />
+              <Ionicons name={selectedConvo?.isArchived ? 'archive' : 'archive-outline'} size={18} color="#5288c1" />
               <Text style={styles.actionMenuBtnText}>
                 {selectedConvo?.isArchived ? 'Unarchive Chat' : 'Archive Chat'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionMenuBtn, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
+              style={styles.actionMenuBtn}
               onPress={() => {
                 setActionMenuVisible(false);
                 toggleMute(selectedConvo?._id, selectedConvo?.isMuted);
               }}
             >
-              <Ionicons name={selectedConvo?.isMuted ? 'volume-high' : 'volume-mute'} size={18} color="#2563eb" />
+              <Ionicons name={selectedConvo?.isMuted ? 'volume-high' : 'volume-mute'} size={18} color="#5288c1" />
               <Text style={styles.actionMenuBtnText}>
                 {selectedConvo?.isMuted ? 'Unmute Chat' : 'Mute Chat'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionMenuBtn, { borderBottomWidth: 0, marginTop: 12 }]}
+              style={[styles.actionMenuBtn, { borderBottomWidth: 0, marginTop: 8 }]}
               onPress={() => setActionMenuVisible(false)}
             >
-              <Text style={[styles.actionMenuBtnText, { color: '#64748b', textAlign: 'center' }]}>Cancel</Text>
+              <Text style={[styles.actionMenuBtnText, { color: '#e53935', textAlign: 'center' }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -521,90 +522,186 @@ export default function ChatInboxScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+  },
+  inboxRoot: {
+    flex: 1,
+    backgroundColor: '#17212b',
+  },
   header: {
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#111827',
-    paddingTop: 52,
-    paddingBottom: 14,
+    justifyContent: 'space-between',
+    backgroundColor: '#17212b',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#0e1621',
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#f1f5f9' },
-  newChatBtn: { backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  newChatBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { color: '#64748b', fontSize: 15 },
-  item: {
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    gap: 12,
   },
-  avatarContainer: { position: 'relative' },
-  avatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontSize: 20, fontWeight: '800' },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#10b981',
-    borderWidth: 2,
-    borderColor: '#0a0e1a',
+  iconBtn: {
+    padding: 6,
   },
-  details: { flex: 1, marginLeft: 14 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
-  name: { fontSize: 16, fontWeight: '700', color: '#f1f5f9' },
-  time: { fontSize: 11, color: '#64748b' },
-  preview: { fontSize: 13, color: '#64748b', flex: 1, marginRight: 8 },
-  badge: { backgroundColor: '#2563eb', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
-  badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '800' },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2b3a4b',
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 14,
+    paddingVertical: 8,
+    ...(Platform.OS === 'web' && { outlineStyle: 'none' }),
+  },
   adminBar: {
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#111827',
+    backgroundColor: '#232e3c',
     paddingHorizontal: 16,
-    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#0e1621',
   },
-  adminBarText: { color: '#64748b', fontSize: 12, fontWeight: '600' },
-  adminBarBtn: { backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 1, borderColor: '#2563eb', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  adminBarBtnText: { color: '#2563eb', fontSize: 12, fontWeight: '700' },
+  adminBarTitle: {
+    color: '#708499',
+    fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+  },
+  adminBarBtnText: {
+    color: '#5288c1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   archiveHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#111827',
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#0e1621',
   },
   archiveHeaderText: {
-    color: '#2563eb',
+    color: '#5288c1',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  itemRow: {
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
+  },
+  details: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  nameBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  nameText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  timeText: {
+    fontSize: 12,
+    color: '#708499',
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  previewText: {
+    fontSize: 14,
+    color: '#708499',
+    flex: 1,
+    marginRight: 8,
+  },
+  unreadBadge: {
+    backgroundColor: '#5288c1',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
     fontWeight: '700',
   },
-  backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#111827', borderRadius: 12, width: '85%', padding: 20, borderWidth: 1, borderColor: '#1e293b' },
-  modalTitle: { fontSize: 16, fontWeight: '800', color: '#f1f5f9' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#232e3c',
+    borderRadius: 12,
+    width: '80%',
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 12,
+  },
   actionMenuBtn: {
-    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#0e1621',
   },
   actionMenuBtnText: {
-    fontSize: 15,
-    color: '#f1f5f9',
-    fontWeight: '600',
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
+  rowActionBtn: {
+    padding: 8,
+    marginLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

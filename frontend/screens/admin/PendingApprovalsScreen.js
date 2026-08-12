@@ -5,94 +5,56 @@ import {
   View,
   FlatList,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   RefreshControl,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import * as adminApi from '../../services/adminApi';
-import { COLORS, SPACING, RADIUS } from '../../theme';
+import Avatar from '../../components/ui/Avatar';
+import RoleBadge from '../../components/ui/RoleBadge';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
-function PendingCard({ user, onApprove, onReject, loading }) {
-  const [note, setNote] = useState('');
-
-  const roleLabel = user.role === 'teacher' ? `📚 Teacher` : `🎒 Student`;
-  const extra = user.subject
-    ? `Subject: ${user.subject}`
-    : user.classGrade
-    ? `Class/Grade: ${user.classGrade}`
-    : '';
+function PendingRow({ user, onApprove, onReject, loading }) {
+  const extra = user.subject || user.classGrade || user.phone || '—';
 
   return (
-    <View style={styles.card}>
-      {/* User Info */}
-      <View style={styles.cardHeader}>
-        <View style={[styles.cardAvatar, { backgroundColor: user.role === 'teacher' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(124, 58, 237, 0.1)' }]}>
-          <Text style={[styles.cardAvatarText, { color: user.role === 'teacher' ? '#10b981' : '#7c3aed' }]}>
-            {user.name?.[0]?.toUpperCase() || '?'}
-          </Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardName}>{user.name}</Text>
-          <Text style={styles.cardPhone}>{user.phone || '—'}</Text>
-          
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-            <View style={[styles.roleBadge, { backgroundColor: user.role === 'teacher' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(124, 58, 237, 0.1)' }]}>
-              <Text style={[styles.roleBadgeText, { color: user.role === 'teacher' ? '#10b981' : '#7c3aed' }]}>
-                {user.role.toUpperCase()}
-              </Text>
-            </View>
-            <View style={[styles.roleBadge, { backgroundColor: 'rgba(251, 191, 36, 0.1)' }]}>
-              <Text style={[styles.roleBadgeText, { color: '#fbbf24' }]}>
-                {user.status.toUpperCase()}
-              </Text>
-            </View>
-          </View>
+    <View style={styles.pendingRow}>
+      <Avatar name={user.name} role={user.role} size="medium" />
 
-          {extra ? <Text style={styles.cardMeta}>{extra}</Text> : null}
-          <Text style={styles.cardDate}>
-            Registered: {new Date(user.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-          </Text>
+      <View style={styles.details}>
+        <View style={styles.nameLine}>
+          <Text style={styles.nameText} numberOfLines={1}>{user.name}</Text>
+          <RoleBadge role={user.role} style={{ alignSelf: 'center' }} />
         </View>
+        <Text style={styles.subText} numberOfLines={1}>{extra}</Text>
       </View>
 
-      {/* Optional Note */}
-      <TextInput
-        style={styles.noteInput}
-        placeholder="Add note (optional)..."
-        placeholderTextColor={COLORS.textSecondary}
-        value={note}
-        onChangeText={setNote}
-        multiline
-        numberOfLines={2}
-      />
-
-      {/* Actions */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.rejectBtn]}
-          onPress={() => onReject(user._id, note)}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.actionBtnText}>✕  Reject</Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.approveBtn]}
-          onPress={() => onApprove(user._id, note)}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.actionBtnText}>✓  Approve</Text>
-          )}
-        </TouchableOpacity>
+      <View style={styles.actionButtons}>
+        {loading ? (
+          <ActivityIndicator size="small" color="#5288c1" />
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.smallBtn, { backgroundColor: '#e53935' }]}
+              onPress={() => onReject(user._id)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={16} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.smallBtn, { backgroundColor: '#4dbd74' }]}
+              onPress={() => onApprove(user._id)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark" size={16} color="#ffffff" />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -110,8 +72,8 @@ export default function PendingApprovalsScreen({ navigation }) {
       setError('');
       const res = await adminApi.getUsers({ status: 'pending', limit: 100 });
       setUsers(res.data.users || []);
-    } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to load pending users.');
+    } catch (_err) {
+      setError('Failed to load pending users.');
     }
   }, []);
 
@@ -128,21 +90,36 @@ export default function PendingApprovalsScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const handleApprove = async (userId, note) => {
+  const handleApprove = async (userId) => {
     setActionLoading((prev) => ({ ...prev, [userId]: true }));
     try {
-      await adminApi.approveUser(userId, note);
+      await adminApi.approveUser(userId, '');
       setUsers((prev) => prev.filter((u) => u._id !== userId));
-    } catch (err) {
-      Alert.alert('Error', err?.response?.data?.error || 'Failed to approve user.');
+    } catch (_err) {
+      // silent fail
     } finally {
       setActionLoading((prev) => ({ ...prev, [userId]: false }));
     }
   };
 
-  const handleReject = async (userId, note) => {
+  const handleReject = async (userId) => {
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm('Are you sure you want to reject this application?');
+      if (!confirm) return;
+      setActionLoading((prev) => ({ ...prev, [userId]: true }));
+      try {
+        await adminApi.rejectUser(userId, '');
+        setUsers((prev) => prev.filter((u) => u._id !== userId));
+      } catch (_err) {
+        // silent fail
+      } finally {
+        setActionLoading((prev) => ({ ...prev, [userId]: false }));
+      }
+      return;
+    }
+
     Alert.alert(
-      'Reject Account',
+      'Reject Application',
       'Are you sure you want to reject this application?',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -152,10 +129,10 @@ export default function PendingApprovalsScreen({ navigation }) {
           onPress: async () => {
             setActionLoading((prev) => ({ ...prev, [userId]: true }));
             try {
-              await adminApi.rejectUser(userId, note);
+              await adminApi.rejectUser(userId, '');
               setUsers((prev) => prev.filter((u) => u._id !== userId));
-            } catch (err) {
-              Alert.alert('Error', err?.response?.data?.error || 'Failed to reject user.');
+            } catch (_err) {
+              // silent fail
             } finally {
               setActionLoading((prev) => ({ ...prev, [userId]: false }));
             }
@@ -166,146 +143,147 @@ export default function PendingApprovalsScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
 
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>‹ Back</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pending Approvals</Text>
         <View style={styles.countBadge}>
-          <Text style={styles.countText}>{users.length}</Text>
+          <Text style={styles.countBadgeText}>{users.length}</Text>
         </View>
       </View>
 
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
+      <View style={styles.container}>
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.accent} />
-        </View>
-      ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => (
-            <PendingCard
-              user={item}
-              loading={!!actionLoading[item._id]}
-              onApprove={handleApprove}
-              onReject={handleReject}
-            />
-          )}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.accent} />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={styles.emptyIcon}>🎉</Text>
-              <Text style={styles.emptyText}>No pending approvals!</Text>
-              <Text style={styles.emptySubtext}>All sign-ups have been reviewed.</Text>
-            </View>
-          }
-          contentContainerStyle={{ padding: 16, paddingBottom: 40, flexGrow: 1 }}
-        />
-      )}
+        {loading ? (
+          <LoadingScreen />
+        ) : (
+          <FlatList
+            data={users}
+            keyExtractor={(item) => item._id}
+            renderItem={({ item }) => (
+              <PendingRow
+                user={item}
+                loading={!!actionLoading[item._id]}
+                onApprove={handleApprove}
+                onReject={handleReject}
+              />
+            )}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#5288c1" />
+            }
+            ListEmptyComponent={
+              <EmptyState title="No pending approvals" subtitle="All registration applications have been reviewed." />
+            }
+            contentContainerStyle={{ paddingBottom: 40 }}
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  root: {
+    flex: 1,
+    backgroundColor: '#17212b',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
+  },
   header: {
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    paddingTop: 52,
-    paddingBottom: 14,
+    justifyContent: 'space-between',
+    backgroundColor: '#17212b',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+    borderBottomColor: '#0e1621',
   },
-  backText: { color: COLORS.accent, fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
   countBadge: {
-    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-    borderColor: COLORS.accent,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
+    backgroundColor: '#5288c1',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
   },
-  countText: { color: COLORS.accent, fontWeight: '800', fontSize: 13 },
+  countBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   errorBox: {
     margin: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: COLORS.danger,
-    borderWidth: 1,
+    backgroundColor: 'rgba(229, 57, 53, 0.1)',
     borderRadius: 8,
     padding: 12,
   },
-  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 13 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { color: COLORS.textPrimary, fontSize: 18, fontWeight: '700' },
-  emptySubtext: { color: COLORS.textSecondary, fontSize: 14, marginTop: 4 },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.card,
-    marginBottom: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  errorText: {
+    color: '#e53935',
+    textAlign: 'center',
+    fontSize: 13,
   },
-  cardHeader: { flexDirection: 'row', gap: 14, marginBottom: 14 },
-  cardAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+  pendingRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
+  },
+  details: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  nameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nameText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  subText: {
+    fontSize: 12,
+    color: '#708499',
+    marginTop: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  smallBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  cardAvatarText: { fontSize: 20, fontWeight: '800', color: COLORS.accent },
-  cardName: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
-  cardPhone: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
-  cardMeta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  cardDate: { fontSize: 11, color: COLORS.textSecondary, marginTop: 3 },
-  noteInput: {
-    backgroundColor: COLORS.bg,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 10,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    marginBottom: 12,
-    minHeight: 44,
-  },
-  actionRow: { flexDirection: 'row', gap: 10 },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: RADIUS.button,
-    alignItems: 'center',
-  },
-  approveBtn: { backgroundColor: COLORS.success },
-  rejectBtn: { backgroundColor: COLORS.danger },
-  actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  roleBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
   },
 });

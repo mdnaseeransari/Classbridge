@@ -6,11 +6,11 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as adminApi from '../../services/adminApi';
-import { COLORS, SPACING, RADIUS } from '../../theme';
 
 export default function CreateAdminScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -38,7 +38,6 @@ export default function CreateAdminScreen({ navigation }) {
         email: email.trim().toLowerCase(),
         password,
       });
-      Alert.alert('Success', 'Admin account created successfully.');
       navigation.goBack();
     } catch (err) {
       setError(err?.response?.data?.error || 'Failed to create admin account.');
@@ -48,112 +47,138 @@ export default function CreateAdminScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>‹ Cancel</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Admin</Text>
-        <View style={{ width: 40 }} />
+        <Text style={styles.headerTitle}>Create Admin</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      <View style={styles.body}>
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. John Doe"
-          placeholderTextColor={COLORS.textSecondary}
-          value={name}
-          onChangeText={setName}
-        />
+      <View style={styles.container}>
+        <View style={styles.body}>
+          <Text style={styles.label}>FULL NAME</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. John Doe"
+            placeholderTextColor="#708499"
+            value={name}
+            onChangeText={setName}
+          />
 
-        <Text style={styles.label}>Email Address</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. john@classbridge.com"
-          placeholderTextColor={COLORS.textSecondary}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
+          <Text style={styles.label}>EMAIL ADDRESS</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. john@classbridge.com"
+            placeholderTextColor="#708499"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
 
-        <Text style={styles.label}>Password (minimum 8 characters)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="••••••••"
-          placeholderTextColor={COLORS.textSecondary}
-          secureTextEntry
-          autoCapitalize="none"
-          value={password}
-          onChangeText={setPassword}
-        />
+          <Text style={styles.label}>PASSWORD (MIN 8 CHARS)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter password"
+            placeholderTextColor="#708499"
+            secureTextEntry
+            autoCapitalize="none"
+            value={password}
+            onChangeText={setPassword}
+          />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <TouchableOpacity
-          style={[styles.btn, loading && styles.btnDisabled]}
-          onPress={handleCreate}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.btnText}>Create Admin Account</Text>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.btn, loading && styles.btnDisabled]}
+            onPress={handleCreate}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.btnText}>Create Admin Account</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  root: {
+    flex: 1,
+    backgroundColor: '#17212b',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
+  },
   header: {
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    paddingTop: 52,
-    paddingBottom: 14,
+    justifyContent: 'space-between',
+    backgroundColor: '#17212b',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+    borderBottomColor: '#0e1621',
   },
-  backText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
-  body: { padding: 20 },
-  label: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  body: {
+    padding: 24,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#708499',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginTop: 16,
+  },
   input: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 14,
-    color: COLORS.textPrimary,
-    fontSize: 15,
+    backgroundColor: '#2b3a4b',
+    borderRadius: 10,
+    height: 52,
+    paddingHorizontal: 16,
+    color: '#ffffff',
+    fontSize: 14,
   },
-  errorBox: {
-    marginTop: 20,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: COLORS.danger,
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
+  errorText: {
+    color: '#e53935',
+    fontSize: 13,
+    marginTop: 14,
   },
-  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 13 },
   btn: {
-    marginTop: 24,
-    backgroundColor: COLORS.accent,
-    paddingVertical: 14,
-    borderRadius: RADIUS.button,
+    marginTop: 32,
+    backgroundColor: '#5288c1',
+    height: 52,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
 });

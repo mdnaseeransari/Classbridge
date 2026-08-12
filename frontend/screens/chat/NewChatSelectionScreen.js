@@ -8,23 +8,15 @@ import {
   ActivityIndicator,
   StatusBar,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
-import { COLORS, SPACING, RADIUS } from '../../theme';
-
-// Role display config: label, avatar colour, text colour
-const ROLE_META = {
-  superadmin: { label: 'Super Admin', avatarBg: 'rgba(124, 58, 237, 0.1)', avatarText: '#a78bfa' },
-  admin:      { label: 'Admin',       avatarBg: 'rgba(37, 99, 235, 0.1)', avatarText: '#2563eb' },
-  teacher:    { label: 'Teacher',     avatarBg: 'rgba(16, 185, 129, 0.1)', avatarText: '#10b981' },
-  student:    { label: 'Student',     avatarBg: 'rgba(245, 158, 11, 0.1)', avatarText: '#fbbf24' },
-};
-
-function getRoleMeta(role) {
-  return ROLE_META[role] || { label: role, avatarBg: 'rgba(100, 116, 139, 0.1)', avatarText: '#64748b' };
-}
+import Avatar from '../../components/ui/Avatar';
+import RoleBadge from '../../components/ui/RoleBadge';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 export default function NewChatSelectionScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -32,11 +24,10 @@ export default function NewChatSelectionScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [starting, setStarting] = useState(null); // id of user being navigated to
+  const [starting, setStarting] = useState(null);
 
   const isAdmin = ['admin', 'superadmin'].includes(user?.role);
 
-  // ── Fetch contacts on mount ─────────────────────────────────────────────────
   useEffect(() => {
     const fetchRecipients = async () => {
       try {
@@ -44,8 +35,7 @@ export default function NewChatSelectionScreen({ navigation }) {
         const res = await api.get('/chat/contacts');
         const list = res.data.users || [];
         setAllRecipients(list);
-      } catch (err) {
-        console.error('[NEW_CHAT] fetchRecipients error:', err);
+      } catch (_err) {
         setError('Failed to fetch available contacts.');
       } finally {
         setLoading(false);
@@ -55,20 +45,18 @@ export default function NewChatSelectionScreen({ navigation }) {
     fetchRecipients();
   }, [user]);
 
-  // ── Client-side search filter (name or role label) ──────────────────────────
   const recipients = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return allRecipients;
     return allRecipients.filter(
       (u) =>
         u.name.toLowerCase().includes(q) ||
-        (ROLE_META[u.role]?.label || u.role).toLowerCase().includes(q)
+        u.role.toLowerCase().includes(q)
     );
   }, [allRecipients, search]);
 
-  // ── Start conversation ──────────────────────────────────────────────────────
   const handleSelectUser = async (recipient) => {
-    if (starting) return; // prevent double-tap
+    if (starting) return;
     try {
       setStarting(recipient._id);
       setError('');
@@ -84,166 +72,149 @@ export default function NewChatSelectionScreen({ navigation }) {
     }
   };
 
-  // ── Render one contact row ──────────────────────────────────────────────────
   const renderItem = ({ item }) => {
-    const meta = getRoleMeta(item.role);
     const isStarting = starting === item._id;
 
     return (
       <TouchableOpacity
-        style={styles.item}
+        style={styles.itemRow}
         activeOpacity={0.75}
         disabled={!!starting}
         onPress={() => handleSelectUser(item)}
       >
-        <View style={[styles.avatar, { backgroundColor: meta.avatarBg }]}>
-          {isStarting ? (
-            <ActivityIndicator size="small" color={meta.avatarText} />
-          ) : (
-            <Text style={[styles.avatarText, { color: meta.avatarText }]}>
-              {item.name[0]?.toUpperCase()}
-            </Text>
-          )}
-        </View>
+        <Avatar name={item.name} role={item.role} size="medium" />
         <View style={styles.details}>
-          <Text style={styles.name}>{item.name}</Text>
-          <Text style={[styles.roleLabel, { color: meta.avatarText }]}>{meta.label}</Text>
+          <Text style={styles.nameText}>{item.name}</Text>
+          <View style={{ marginTop: 2 }}>
+            <RoleBadge role={item.role} />
+          </View>
         </View>
-        <Text style={styles.chevron}>›</Text>
+        {isStarting ? (
+          <ActivityIndicator size="small" color="#5288c1" />
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color="#708499" />
+        )}
       </TouchableOpacity>
     );
   };
 
-  const listHeader = (
-    <View style={styles.hint}>
-      <Text style={styles.hintText}>
-        {isAdmin
-          ? 'Select anyone to start a direct message.'
-          : user?.role === 'teacher'
-          ? 'Select an Admin or another Teacher to message.'
-          : 'Select an Admin or another Student to message.'}
-      </Text>
-    </View>
-  );
-
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
 
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="close" size={18} color={COLORS.textSecondary} />
-          <Text style={styles.backText}>Cancel</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Chat</Text>
-        <View style={{ width: 60 }} />
+        <Text style={styles.headerTitle}>New Message</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      {/* Search bar — only shown when list is ready */}
-      {!loading && !error && (
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name or role…"
-            placeholderTextColor={COLORS.textSecondary}
-            value={search}
-            onChangeText={setSearch}
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-          />
-        </View>
-      )}
+      <View style={styles.container}>
+        {!loading && !error && (
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search contacts..."
+              placeholderTextColor="#708499"
+              value={search}
+              onChangeText={setSearch}
+              autoCorrect={false}
+            />
+          </View>
+        )}
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.accent} />
-        </View>
-      ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={recipients}
-          keyExtractor={(item) => item._id}
-          renderItem={renderItem}
-          ListHeaderComponent={listHeader}
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>
-                {search.trim() ? `No contacts matching "${search.trim()}".` : 'No available contacts found.'}
-              </Text>
-            </View>
-          }
-          contentContainerStyle={{ paddingBottom: 40 }}
-          keyboardShouldPersistTaps="handled"
-        />
-      )}
+        {loading ? (
+          <LoadingScreen />
+        ) : error ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={recipients}
+            keyExtractor={(item) => item._id}
+            renderItem={renderItem}
+            ListEmptyComponent={
+              <EmptyState title="No contacts found" subtitle={search.trim() ? `No matches for "${search.trim()}".` : ''} />
+            }
+            contentContainerStyle={{ paddingBottom: 40 }}
+            keyboardShouldPersistTaps="handled"
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    paddingTop: 52,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+  root: {
+    flex: 1,
+    backgroundColor: '#17212b',
   },
-  backText: { color: COLORS.textSecondary, fontSize: 15, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
-  searchRow: {
-    backgroundColor: COLORS.surface,
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
+  },
+  header: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#17212b',
     paddingHorizontal: 16,
-    paddingBottom: 12,
-    paddingTop: 8,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+    borderBottomColor: '#0e1621',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  searchRow: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
   },
   searchInput: {
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    borderRadius: RADIUS.button,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    color: COLORS.textPrimary,
+    backgroundColor: '#2b3a4b',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    height: 44,
+    color: '#ffffff',
     fontSize: 14,
   },
-  hint: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 6,
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  hintText: { color: COLORS.textSecondary, fontSize: 12, fontStyle: 'italic' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 14, lineHeight: 20 },
-  emptyText: { color: COLORS.textSecondary, fontSize: 15, textAlign: 'center' },
-  item: {
+  errorText: {
+    color: '#e53935',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  itemRow: {
+    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+    borderBottomColor: '#0e1621',
   },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    justifyContent: 'center',
-    alignItems: 'center',
+  details: {
+    flex: 1,
+    marginLeft: 12,
   },
-  avatarText: { fontSize: 17, fontWeight: '800' },
-  details: { flex: 1, marginLeft: 13 },
-  name: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
-  roleLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  chevron: { color: COLORS.cardBorder, fontSize: 22, fontWeight: '300' },
+  nameText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
 });

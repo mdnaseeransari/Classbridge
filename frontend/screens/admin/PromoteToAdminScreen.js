@@ -6,11 +6,12 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as adminApi from '../../services/adminApi';
-import { COLORS, SPACING, RADIUS } from '../../theme';
+import RoleBadge from '../../components/ui/RoleBadge';
 
 export default function PromoteToAdminScreen({ route, navigation }) {
   const { user } = route.params;
@@ -39,7 +40,6 @@ export default function PromoteToAdminScreen({ route, navigation }) {
         password,
         note: note.trim() || undefined,
       });
-      Alert.alert('Success', `User ${user.name} promoted to Admin successfully.`);
       navigation.navigate('AdminTabs');
     } catch (err) {
       setError(err?.response?.data?.error || 'Failed to promote user to admin.');
@@ -49,130 +49,170 @@ export default function PromoteToAdminScreen({ route, navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>‹ Cancel</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Promote to Admin</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 24 }} />
       </View>
 
-      <View style={styles.body}>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Promoting User</Text>
-          <Text style={styles.infoName}>{user.name}</Text>
-          <Text style={styles.infoMeta}>Current Role: {user.role.toUpperCase()}</Text>
-          <Text style={styles.infoMeta}>Phone: {user.phone || '—'}</Text>
-        </View>
-
-        <Text style={styles.label}>Admin Email Address</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. admin@classbridge.com"
-          placeholderTextColor={COLORS.textSecondary}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <Text style={styles.label}>Admin Password (minimum 8 characters)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="••••••••"
-          placeholderTextColor={COLORS.textSecondary}
-          secureTextEntry
-          autoCapitalize="none"
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        <Text style={styles.label}>Promotion Note (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Reason for promotion..."
-          placeholderTextColor={COLORS.textSecondary}
-          value={note}
-          onChangeText={setNote}
-        />
-
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+      <View style={styles.container}>
+        <View style={styles.body}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardLabel}>TARGET USER</Text>
+            <Text style={styles.infoName}>{user.name}</Text>
+            <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <RoleBadge role={user.role} style={{ alignSelf: 'center' }} />
+              <Text style={styles.infoMeta}>{user.phone || '—'}</Text>
+            </View>
           </View>
-        ) : null}
 
-        <TouchableOpacity
-          style={[styles.btn, loading && styles.btnDisabled]}
-          onPress={handlePromote}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.btnText}>Promote Account</Text>
-          )}
-        </TouchableOpacity>
+          <Text style={styles.label}>ADMIN EMAIL ADDRESS</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. admin@classbridge.com"
+            placeholderTextColor="#708499"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+
+          <Text style={styles.label}>ADMIN PASSWORD (MIN 8 CHARS)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter password"
+            placeholderTextColor="#708499"
+            secureTextEntry
+            autoCapitalize="none"
+            value={password}
+            onChangeText={setPassword}
+          />
+
+          <Text style={styles.label}>PROMOTION NOTE (OPTIONAL)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Reason for promotion..."
+            placeholderTextColor="#708499"
+            value={note}
+            onChangeText={setNote}
+          />
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.btn, loading && styles.btnDisabled]}
+            onPress={handlePromote}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.btnText}>Promote Account</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  root: {
+    flex: 1,
+    backgroundColor: '#17212b',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
+  },
   header: {
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    paddingTop: 52,
-    paddingBottom: 14,
+    justifyContent: 'space-between',
+    backgroundColor: '#17212b',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+    borderBottomColor: '#0e1621',
   },
-  backText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
-  body: { padding: 20 },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  body: {
+    padding: 24,
+  },
   infoCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#232e3c',
+    borderRadius: 10,
     padding: 16,
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    marginBottom: 20,
+    marginBottom: 8,
   },
-  infoTitle: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', marginBottom: 4 },
-  infoName: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
-  infoMeta: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
-  label: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+  infoCardLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#708499',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  infoName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  infoMeta: {
+    fontSize: 12,
+    color: '#708499',
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#708499',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginTop: 16,
+  },
   input: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 14,
-    color: COLORS.textPrimary,
-    fontSize: 15,
+    backgroundColor: '#2b3a4b',
+    borderRadius: 10,
+    height: 52,
+    paddingHorizontal: 16,
+    color: '#ffffff',
+    fontSize: 14,
   },
-  errorBox: {
-    marginTop: 20,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: COLORS.danger,
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
+  errorText: {
+    color: '#e53935',
+    fontSize: 13,
+    marginTop: 14,
   },
-  errorText: { color: COLORS.danger, textAlign: 'center', fontSize: 13 },
   btn: {
-    marginTop: 24,
-    backgroundColor: COLORS.accent,
-    paddingVertical: 14,
-    borderRadius: RADIUS.button,
+    marginTop: 32,
+    backgroundColor: '#5288c1',
+    height: 52,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
 });

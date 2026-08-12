@@ -5,37 +5,31 @@ import {
   View,
   FlatList,
   TouchableOpacity,
-  TextInput,
-  ActivityIndicator,
+  ScrollView,
   RefreshControl,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import * as adminApi from '../../services/adminApi';
+import Avatar from '../../components/ui/Avatar';
+import RoleBadge from '../../components/ui/RoleBadge';
+import StatusBadge from '../../components/ui/StatusBadge';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 const ROLES = ['all', 'teacher', 'student', 'admin'];
 const STATUSES = ['all', 'pending', 'approved', 'rejected'];
 
-const ROLE_COLORS = {
-  teacher: '#10b981',
-  student: '#7c3aed',
-  admin: '#2563eb',
-  superadmin: '#2563eb',
-};
-
-const STATUS_COLORS = {
-  pending: '#fbbf24',
-  approved: '#34d399',
-  rejected: '#ef4444',
-};
-
-function FilterPill({ label, active, onPress }) {
+function FilterChip({ label, active, onPress }) {
   return (
     <TouchableOpacity
-      style={[styles.pill, active && styles.pillActive]}
+      style={[styles.chip, active ? styles.chipActive : styles.chipInactive]}
       onPress={onPress}
+      activeOpacity={0.8}
     >
-      <Text style={[styles.pillText, active && styles.pillTextActive]}>
+      <Text style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextInactive]}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -43,41 +37,23 @@ function FilterPill({ label, active, onPress }) {
 }
 
 function UserRow({ user, onPress }) {
-  const roleColor = ROLE_COLORS[user.role] || '#94a3b8';
-  const statusColor = STATUS_COLORS[user.status] || '#64748b';
-
   return (
-    <TouchableOpacity style={styles.row} onPress={() => onPress(user)} activeOpacity={0.75}>
-      <View style={styles.rowLeft}>
-        <View style={[styles.avatar, { backgroundColor: roleColor + '22' }]}>
-          <Text style={[styles.avatarText, { color: roleColor }]}>
-            {user.name?.[0]?.toUpperCase() || '?'}
-          </Text>
+    <TouchableOpacity style={styles.userRow} onPress={() => onPress(user)} activeOpacity={0.75}>
+      <Avatar name={user.name} role={user.role} size="medium" />
+
+      <View style={styles.details}>
+        <View style={styles.nameLine}>
+          <Text style={styles.nameText} numberOfLines={1}>{user.name}</Text>
+          <RoleBadge role={user.role} style={{ alignSelf: 'center' }} />
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowName} numberOfLines={1}>{user.name}</Text>
-          <Text style={styles.rowPhone} numberOfLines={1}>
-            {user.phone || user.email || '—'}
-          </Text>
-          {user.subject ? (
-            <Text style={styles.rowMeta}>{user.subject}</Text>
-          ) : user.classGrade ? (
-            <Text style={styles.rowMeta}>{user.classGrade}</Text>
-          ) : null}
-        </View>
+        <Text style={styles.subText} numberOfLines={1}>
+          {user.subject || user.classGrade || user.phone || user.email || '—'}
+        </Text>
       </View>
-      <View style={styles.rowRight}>
-        <View style={[styles.badge, { backgroundColor: roleColor + '22' }]}>
-          <Text style={[styles.badgeText, { color: roleColor }]}>{user.role}</Text>
-        </View>
-        <View style={[styles.badge, { backgroundColor: statusColor + '22', marginTop: 4 }]}>
-          <Text style={[styles.badgeText, { color: statusColor }]}>{user.status}</Text>
-        </View>
-        {user.isBanned && (
-          <View style={[styles.badge, { backgroundColor: '#ef444422', marginTop: 4 }]}>
-            <Text style={[styles.badgeText, { color: '#ef4444' }]}>banned</Text>
-          </View>
-        )}
+
+      <View style={styles.statusRight}>
+        <StatusBadge status={user.isBanned ? 'banned' : user.status} />
+        <Ionicons name="chevron-forward" size={16} color="#708499" style={{ marginTop: 2 }} />
       </View>
     </TouchableOpacity>
   );
@@ -87,240 +63,209 @@ export default function UserListScreen({ navigation }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
 
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-
-  const fetchUsers = useCallback(async (pageNum = 1, append = false) => {
+  const fetchUsers = useCallback(async () => {
     try {
       setError('');
-      const params = { page: pageNum, limit: 20 };
+      const params = { page: 1, limit: 100 };
       if (roleFilter !== 'all') params.role = roleFilter;
       if (statusFilter !== 'all') params.status = statusFilter;
 
       const res = await adminApi.getUsers(params);
-      const fetched = res.data.users || [];
-      setTotalPages(res.data.pagination?.totalPages || 1);
-
-      if (append) {
-        setUsers((prev) => [...prev, ...fetched]);
-      } else {
-        setUsers(fetched);
-        setPage(1);
-      }
-    } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to load users.');
+      setUsers(res.data.users || []);
+    } catch (_err) {
+      setError('Failed to load users.');
     }
   }, [roleFilter, statusFilter]);
 
-  // Reload when filters change or screen is focused
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      fetchUsers(1, false).finally(() => setLoading(false));
+      fetchUsers().finally(() => setLoading(false));
     }, [fetchUsers])
   );
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchUsers(1, false);
+    await fetchUsers();
     setRefreshing(false);
-  };
-
-  const handleLoadMore = async () => {
-    if (loadingMore || page >= totalPages) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    setLoadingMore(true);
-    await fetchUsers(nextPage, true);
-    setLoadingMore(false);
   };
 
   const handleUserPress = (user) => {
     navigation.navigate('UserDetail', { userId: user._id });
   };
 
-  const renderFooter = () => {
-    if (loadingMore) return <ActivityIndicator color="#38bdf8" style={{ marginVertical: 16 }} />;
-    if (page < totalPages) {
-      return (
-        <TouchableOpacity style={styles.loadMore} onPress={handleLoadMore}>
-          <Text style={styles.loadMoreText}>Load More</Text>
-        </TouchableOpacity>
-      );
-    }
-    return null;
-  };
-
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0e1a" />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
 
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>‹ Back</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>All Users</Text>
+        <Text style={styles.headerTitle}>Users</Text>
         <TouchableOpacity onPress={() => navigation.navigate('PendingApprovals')}>
-          <Text style={styles.pendingLink}>Pending ›</Text>
+          <Ionicons name="time-outline" size={22} color="#ffa726" />
         </TouchableOpacity>
       </View>
 
-      {/* Role Filters */}
-      <View style={styles.filterSection}>
-        <Text style={styles.filterLabel}>Role</Text>
-        <View style={styles.pills}>
-          {ROLES.map((r) => (
-            <FilterPill
-              key={r}
-              label={r}
-              active={roleFilter === r}
-              onPress={() => setRoleFilter(r)}
-            />
-          ))}
+      <View style={styles.container}>
+        {/* Horizontal Chips Bar */}
+        <View style={styles.filterSection}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+            <Text style={styles.filterLabel}>ROLE:</Text>
+            {ROLES.map((r) => (
+              <FilterChip key={r} label={r} active={roleFilter === r} onPress={() => setRoleFilter(r)} />
+            ))}
+            <Text style={[styles.filterLabel, { marginLeft: 12 }]}>STATUS:</Text>
+            {STATUSES.map((s) => (
+              <FilterChip key={s} label={s} active={statusFilter === s} onPress={() => setStatusFilter(s)} />
+            ))}
+          </ScrollView>
         </View>
+
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {loading ? (
+          <LoadingScreen />
+        ) : (
+          <FlatList
+            data={users}
+            keyExtractor={(item) => item._id}
+            renderItem={({ item }) => <UserRow user={item} onPress={handleUserPress} />}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#5288c1" />
+            }
+            ListEmptyComponent={<EmptyState title="No users found" subtitle="Try adjusting your filter options." />}
+            contentContainerStyle={{ paddingBottom: 40 }}
+          />
+        )}
       </View>
-
-      {/* Status Filters */}
-      <View style={[styles.filterSection, { borderBottomWidth: 0 }]}>
-        <Text style={styles.filterLabel}>Status</Text>
-        <View style={styles.pills}>
-          {STATUSES.map((s) => (
-            <FilterPill
-              key={s}
-              label={s}
-              active={statusFilter === s}
-              onPress={() => setStatusFilter(s)}
-            />
-          ))}
-        </View>
-      </View>
-
-      {/* Error */}
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
-
-      {/* List */}
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
-        </View>
-      ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => <UserRow user={item} onPress={handleUserPress} />}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>No users found.</Text>
-            </View>
-          }
-          ListFooterComponent={renderFooter}
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-        />
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
+  root: {
+    flex: 1,
+    backgroundColor: '#17212b',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
+  },
   header: {
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#111827',
-    paddingTop: 52,
-    paddingBottom: 14,
+    justifyContent: 'space-between',
+    backgroundColor: '#17212b',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#0e1621',
   },
-  backBtn: { padding: 4 },
-  backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f1f5f9' },
-  pendingLink: { color: '#fbbf24', fontSize: 14, fontWeight: '600' },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
   filterSection: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 16,
+    backgroundColor: '#232e3c',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#0e1621',
   },
-  filterLabel: { fontSize: 11, color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: 8 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: '#0a0e1a',
-    borderWidth: 1,
-    borderColor: '#1e293b',
-  },
-  pillActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  pillText: { fontSize: 12, color: '#64748b', fontWeight: '600', textTransform: 'capitalize' },
-  pillTextActive: { color: '#fff' },
-  errorBox: {
-    margin: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: '#ef4444',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-  },
-  errorText: { color: '#ef4444', textAlign: 'center', fontSize: 13 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 60 },
-  emptyText: { color: '#64748b', fontSize: 15 },
-  row: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    marginBottom: 10,
-    padding: 14,
+  chipScroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    gap: 6,
   },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  filterLabel: {
+    fontSize: 11,
+    color: '#708499',
+    fontWeight: '500',
+    marginRight: 2,
+  },
+  chip: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { fontSize: 18, fontWeight: '800' },
-  rowName: { fontSize: 15, fontWeight: '700', color: '#f1f5f9' },
-  rowPhone: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  rowMeta: { fontSize: 11, color: '#64748b', marginTop: 1 },
-  rowRight: { alignItems: 'flex-end', marginLeft: 8 },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+  chipActive: {
+    backgroundColor: '#5288c1',
   },
-  badgeText: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
-  loadMore: {
+  chipInactive: {
+    backgroundColor: '#2b3a4b',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  chipTextActive: {
+    color: '#ffffff',
+  },
+  chipTextInactive: {
+    color: '#708499',
+  },
+  errorBox: {
     margin: 16,
-    backgroundColor: '#111827',
+    backgroundColor: 'rgba(229, 57, 53, 0.1)',
     borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#1e293b',
+    padding: 12,
   },
-  loadMoreText: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+  errorText: {
+    color: '#e53935',
+    textAlign: 'center',
+    fontSize: 13,
+  },
+  userRow: {
+    height: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
+  },
+  details: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  nameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nameText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  subText: {
+    fontSize: 12,
+    color: '#708499',
+    marginTop: 2,
+  },
+  statusRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
 });

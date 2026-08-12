@@ -92,6 +92,14 @@ const messageReportSchema = new mongoose.Schema(
       maxlength: [2000, 'adminNotes cannot exceed 2000 characters.'],
       default: null,
     },
+    reportedMessageSnapshot: {
+      content: { type: String, default: null },
+      fileUrl: { type: String, default: null },
+      fileName: { type: String, default: null },
+      fileMimeType: { type: String, default: null },
+      fileSizeBytes: { type: Number, default: null },
+      type: { type: String, default: 'text' },
+    },
   },
   { timestamps: true }
 );

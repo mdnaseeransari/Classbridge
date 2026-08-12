@@ -557,10 +557,12 @@ async function listAllConversations(req, res) {
       const isParticipant = conv.participants.some(
         (p) => p._id.toString() === callerId
       );
-      return {
+      const copy = {
         ...conv,
         isParticipant,
       };
+      delete copy.lastActivityAt;
+      return copy;
     });
 
     return res.status(200).json({
@@ -888,6 +890,30 @@ async function actionReport(req, res) {
   }
 }
 
+/**
+ * DELETE /api/admin/reports/:id
+ * Delete a report record completely. Allowed only after the report is no longer pending.
+ */
+async function deleteReport(req, res) {
+  try {
+    const report = await MessageReport.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found.' });
+    }
+
+    if (report.status === 'pending') {
+      return res.status(400).json({ error: 'Cannot delete a pending report. Resolve or dismiss it first.' });
+    }
+
+    await MessageReport.findByIdAndDelete(req.params.id);
+
+    return res.status(200).json({ message: 'Report deleted successfully.' });
+  } catch (err) {
+    console.error('[ADMIN] deleteReport error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/reset-requests
 // List all pending password/PIN reset requests.
@@ -990,6 +1016,7 @@ module.exports = {
   listReports,
   getReportDetail,
   actionReport,
+  deleteReport,
   listResetRequests,
   resolveResetRequest,
 };

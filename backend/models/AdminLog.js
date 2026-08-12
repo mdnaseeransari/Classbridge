@@ -22,6 +22,8 @@ const adminLogSchema = new mongoose.Schema(
         'promoted',       // teacher/student → admin
         'created_admin',  // new admin account created directly by superadmin
         'password_reset_approved', // password/PIN reset request resolved
+        'message_deleted_via_report', // message deleted due to a report
+        'report_resolved',            // report marked resolved
       ],
       required: [true, 'Action is required.'],
     },

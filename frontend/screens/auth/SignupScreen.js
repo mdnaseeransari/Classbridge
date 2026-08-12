@@ -60,123 +60,125 @@ export default function SignupScreen({ navigation }) {
     if (!result.success) {
       setErrorMsg(result.error);
     } else {
-      // On successful signup, navigate to login with a notice
       navigation.navigate('Login');
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>ClassBridge</Text>
-          <Text style={styles.subtitle}>Join the ClassBridge Community</Text>
-        </View>
-
-        {errorMsg ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{errorMsg}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.form}>
-          {/* Role Selection Toggle */}
-          <Text style={styles.label}>Select Role</Text>
-          <View style={styles.roleToggleContainer}>
-            <TouchableOpacity
-              style={[styles.roleButton, role === 'teacher' && styles.roleButtonActive]}
-              onPress={() => setRole('teacher')}
-            >
-              <Text style={[styles.roleButtonText, role === 'teacher' && styles.roleTextActive]}>
-                Teacher
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.roleButton, role === 'student' && styles.roleButtonActive]}
-              onPress={() => setRole('student')}
-            >
-              <Text style={[styles.roleButtonText, role === 'student' && styles.roleTextActive]}>
-                Student
-              </Text>
-            </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.container}>
+          <View style={styles.headerContainer}>
+            <Text style={styles.title}>ClassBridge</Text>
+            <Text style={styles.subtitle}>Join the ClassBridge Community</Text>
           </View>
 
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="John Doe"
-            placeholderTextColor="#94a3b8"
-            value={name}
-            onChangeText={setName}
-          />
+          <View style={styles.form}>
+            {/* Role Selection Toggle */}
+            <Text style={styles.label}>ACCOUNT TYPE</Text>
+            <View style={styles.roleToggleContainer}>
+              <TouchableOpacity
+                style={[styles.roleButton, role === 'teacher' ? styles.roleButtonActive : styles.roleButtonInactive]}
+                onPress={() => setRole('teacher')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.roleButtonText, role === 'teacher' ? styles.roleTextActive : styles.roleTextInactive]}>
+                  Teacher
+                </Text>
+              </TouchableOpacity>
 
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. +1234567890"
-            placeholderTextColor="#94a3b8"
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
-          />
+              <TouchableOpacity
+                style={[styles.roleButton, role === 'student' ? styles.roleButtonActive : styles.roleButtonInactive]}
+                onPress={() => setRole('student')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.roleButtonText, role === 'student' ? styles.roleTextActive : styles.roleTextInactive]}>
+                  Student
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-          <Text style={styles.label}>6-Digit Security PIN</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Create 6-digit PIN"
-            placeholderTextColor="#94a3b8"
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={6}
-            value={pin}
-            onChangeText={setPin}
-          />
+            <Text style={styles.label}>FULL NAME</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="John Doe"
+              placeholderTextColor="#708499"
+              value={name}
+              onChangeText={setName}
+            />
 
-          {/* Conditional Role Fields */}
-          {role === 'teacher' ? (
-            <>
-              <Text style={styles.label}>Teaching Subject</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Mathematics, Science"
-                placeholderTextColor="#94a3b8"
-                value={subject}
-                onChangeText={setSubject}
-              />
-            </>
-          ) : (
-            <>
-              <Text style={styles.label}>Class / Grade</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Grade 10, Class A"
-                placeholderTextColor="#94a3b8"
-                value={classGrade}
-                onChangeText={setClassGrade}
-              />
-            </>
-          )}
+            <Text style={styles.label}>PHONE NUMBER</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. +1234567890"
+              placeholderTextColor="#708499"
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={setPhone}
+            />
 
-          <TouchableOpacity
-            style={[styles.button, isSubmitting && styles.buttonDisabled]}
-            onPress={handleSignup}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#ffffff" />
+            <Text style={styles.label}>6-DIGIT SECURITY PIN</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Create 6-digit PIN"
+              placeholderTextColor="#708499"
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={6}
+              value={pin}
+              onChangeText={setPin}
+            />
+
+            {/* Conditional Role Fields */}
+            {role === 'teacher' ? (
+              <>
+                <Text style={styles.label}>TEACHING SUBJECT</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Mathematics, Science"
+                  placeholderTextColor="#708499"
+                  value={subject}
+                  onChangeText={setSubject}
+                />
+              </>
             ) : (
-              <Text style={styles.buttonText}>Submit Registration</Text>
+              <>
+                <Text style={styles.label}>CLASS / GRADE</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Grade 10, Class A"
+                  placeholderTextColor="#708499"
+                  value={classGrade}
+                  onChangeText={setClassGrade}
+                />
+              </>
             )}
-          </TouchableOpacity>
 
-          <View style={styles.footerLinks}>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.linkText}>Already have an account? <Text style={styles.linkBold}>Log In</Text></Text>
+            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.button, isSubmitting && styles.buttonDisabled]}
+              onPress={handleSignup}
+              disabled={isSubmitting}
+              activeOpacity={0.8}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.buttonText}>Create Account</Text>
+              )}
             </TouchableOpacity>
+
+            <View style={styles.footerLinks}>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.linkText}>
+                  Already registered? <Text style={styles.linkBold}>Sign In</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -185,123 +187,123 @@ export default function SignupScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0a0e1a',
+    backgroundColor: '#17212b',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#2563eb',
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#5288c1',
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 15,
-    color: '#64748b',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: '#ef4444',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#ef4444',
     fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
+    color: '#708499',
+    marginTop: 6,
+    fontWeight: '400',
   },
   form: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    width: '100%',
   },
   roleToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#0a0e1a',
-    borderRadius: 8,
-    padding: 4,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#1e293b',
+    gap: 8,
+    marginBottom: 16,
   },
   roleButton: {
     flex: 1,
-    paddingVertical: 10,
+    height: 44,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
   },
   roleButtonActive: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#5288c1',
+  },
+  roleButtonInactive: {
+    backgroundColor: '#2b3a4b',
   },
   roleButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748b',
   },
   roleTextActive: {
     color: '#ffffff',
   },
+  roleTextInactive: {
+    color: '#708499',
+  },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#f1f5f9',
-    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#708499',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginLeft: 2,
   },
   input: {
-    backgroundColor: '#0a0e1a',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    color: '#f1f5f9',
-    padding: 14,
-    fontSize: 16,
+    backgroundColor: '#2b3a4b',
+    borderRadius: 10,
+    borderWidth: 0,
+    color: '#ffffff',
+    paddingHorizontal: 16,
+    height: 52,
+    fontSize: 14,
     marginBottom: 16,
   },
+  errorText: {
+    color: '#e53935',
+    fontSize: 13,
+    marginBottom: 14,
+    marginLeft: 2,
+  },
   button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    paddingVertical: 14,
+    backgroundColor: '#5288c1',
+    borderRadius: 10,
+    height: 52,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
   },
   footerLinks: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 24,
   },
   linkText: {
-    color: '#64748b',
+    color: '#708499',
     fontSize: 14,
   },
   linkBold: {
-    color: '#2563eb',
-    fontWeight: '700',
+    color: '#5288c1',
+    fontWeight: '600',
   },
 });

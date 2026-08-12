@@ -28,6 +28,13 @@
         height: 100%;
         flex: 1;
       }
+      /* Prevent default browser focus outline box rings on web */
+      *,
+      *:focus,
+      *:active {
+        outline: none !important;
+        box-shadow: none !important;
+      }
     </style>
   </head>
 

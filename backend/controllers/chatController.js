@@ -149,7 +149,11 @@ async function listConversations(req, res) {
       return timeB - timeA;
     });
 
-    const paginatedConversations = mapped.slice(skip, skip + limitNum);
+    const paginatedConversations = mapped.slice(skip, skip + limitNum).map(c => {
+      const copy = { ...c };
+      delete copy.lastActivityAt;
+      return copy;
+    });
 
     return res.status(200).json({
       conversations: paginatedConversations,
@@ -200,6 +204,7 @@ async function getConversation(req, res) {
     convoObj.isPinned = pinnedIds.includes(conversation._id.toString());
     convoObj.isArchived = archivedIds.includes(conversation._id.toString());
     convoObj.isMuted = mutedIds.includes(conversation._id.toString());
+    delete convoObj.lastActivityAt;
 
     return res.status(200).json({ conversation: convoObj });
   } catch (err) {
@@ -845,6 +850,14 @@ async function reportMessage(req, res) {
       reportedUser: message.sender,
       reason,
       details: details ? String(details).trim() : null,
+      reportedMessageSnapshot: {
+        content: message.content,
+        fileUrl: message.fileUrl,
+        fileName: message.fileName,
+        fileMimeType: message.fileMimeType,
+        fileSizeBytes: message.fileSizeBytes,
+        type: message.type || 'text',
+      },
     });
 
     // Mark message as reported so it is exempt from auto-cleanup cron

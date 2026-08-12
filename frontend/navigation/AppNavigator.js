@@ -61,8 +61,8 @@ import SettingsScreen from '../screens/main/SettingsScreen';
 
 function UserStackNavigator() {
   return (
-    <UserStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0f172a' } }}>
-      <UserStack.Screen name="UserTabs" component={UserTabNavigator} />
+    <UserStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#17212b' } }}>
+      <UserStack.Screen name="Home" component={ChatInboxScreen} />
       <UserStack.Screen name="ChatRoom" component={ChatRoomScreen} />
       <UserStack.Screen name="NewChatSelection" component={NewChatSelectionScreen} />
       <UserStack.Screen name="CreateGroup" component={CreateGroupScreen} />

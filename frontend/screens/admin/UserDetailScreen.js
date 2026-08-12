@@ -11,8 +11,13 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import * as adminApi from '../../services/adminApi';
+import Avatar from '../../components/ui/Avatar';
+import RoleBadge from '../../components/ui/RoleBadge';
+import StatusBadge from '../../components/ui/StatusBadge';
+import LoadingScreen from '../../components/ui/LoadingScreen';
 
 export default function UserDetailScreen({ route, navigation }) {
   const { userId } = route.params;
@@ -31,8 +36,8 @@ export default function UserDetailScreen({ route, navigation }) {
       setError('');
       const res = await adminApi.getUser(userId);
       setUser(res.data.user);
-    } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to fetch user details.');
+    } catch (_err) {
+      setError('Failed to fetch user details.');
     }
   };
 
@@ -57,8 +62,8 @@ export default function UserDetailScreen({ route, navigation }) {
         }
         setNote('');
         await fetchUserDetail();
-      } catch (err) {
-        alert(err?.response?.data?.error || `Failed to ${actionText} user.`);
+      } catch (_err) {
+        // silent fail
       } finally {
         setActionLoading(false);
       }
@@ -83,8 +88,8 @@ export default function UserDetailScreen({ route, navigation }) {
               }
               setNote('');
               await fetchUserDetail();
-            } catch (err) {
-              Alert.alert('Error', err?.response?.data?.error || `Failed to ${actionText} user.`);
+            } catch (_err) {
+              // silent fail
             } finally {
               setActionLoading(false);
             }
@@ -99,18 +104,9 @@ export default function UserDetailScreen({ route, navigation }) {
     try {
       await adminApi.unlockUser(userId, note);
       setNote('');
-      if (Platform.OS === 'web') {
-        alert('User account unlocked successfully.');
-      } else {
-        Alert.alert('Success', 'User account unlocked successfully.');
-      }
       await fetchUserDetail();
-    } catch (err) {
-      if (Platform.OS === 'web') {
-        alert(err?.response?.data?.error || 'Failed to unlock user.');
-      } else {
-        Alert.alert('Error', err?.response?.data?.error || 'Failed to unlock user.');
-      }
+    } catch (_err) {
+      // silent fail
     } finally {
       setActionLoading(false);
     }
@@ -123,10 +119,9 @@ export default function UserDetailScreen({ route, navigation }) {
       setActionLoading(true);
       try {
         await adminApi.deleteUser(userId, note);
-        alert('User deleted successfully.');
         navigation.goBack();
-      } catch (err) {
-        alert(err?.response?.data?.error || 'Failed to delete user.');
+      } catch (_err) {
+        // silent fail
       } finally {
         setActionLoading(false);
       }
@@ -145,10 +140,9 @@ export default function UserDetailScreen({ route, navigation }) {
             setActionLoading(true);
             try {
               await adminApi.deleteUser(userId, note);
-              Alert.alert('Success', 'User deleted successfully.');
               navigation.goBack();
-            } catch (err) {
-              Alert.alert('Error', err?.response?.data?.error || 'Failed to delete user.');
+            } catch (_err) {
+              // silent fail
             } finally {
               setActionLoading(false);
             }
@@ -158,194 +152,263 @@ export default function UserDetailScreen({ route, navigation }) {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#38bdf8" />
-      </View>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   if (error || !user) {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>{error || 'User not found.'}</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backBtnText}>Go Back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const showUnlockBtn = user.isLocked || (user.loginAttempts && user.loginAttempts >= 5);
+  const showUnlockBtn = user.isLocked || (user.failedLoginAttempts && user.failedLoginAttempts >= 5);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>User Details</Text>
-        <View style={{ width: 40 }} />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.body}>
+          {/* Profile Header Banner */}
+          <View style={styles.profileHeader}>
+            <TouchableOpacity style={styles.backIcon} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={24} color="#ffffff" />
+            </TouchableOpacity>
+
+            <Avatar name={user.name} role={user.role} size="large" />
+            <Text style={styles.profileName}>{user.name}</Text>
+            
+            <View style={styles.badgesRow}>
+              <RoleBadge role={user.role} />
+              <StatusBadge status={user.isBanned ? 'banned' : user.status} />
+            </View>
+          </View>
+
+          {/* Details Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardSectionTitle}>USER INFORMATION</Text>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Phone Number</Text>
+              <Text style={styles.infoValue}>{user.phone || '—'}</Text>
+            </View>
+            
+            {user.email ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user.email}</Text>
+              </View>
+            ) : null}
+
+            {user.subject ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Subject</Text>
+                <Text style={styles.infoValue}>{user.subject}</Text>
+              </View>
+            ) : user.classGrade ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Class / Grade</Text>
+                <Text style={styles.infoValue}>{user.classGrade}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Lock Status</Text>
+              <Text style={styles.infoValue}>{user.isLocked ? 'Locked 🔒' : 'Active 🔓'}</Text>
+            </View>
+          </View>
+
+          {/* Note Input */}
+          <View style={styles.card}>
+            <Text style={styles.cardSectionTitle}>ACTION NOTE (AUDIT LOG)</Text>
+            <TextInput
+              style={styles.noteInput}
+              placeholder="Reason for audit log..."
+              placeholderTextColor="#708499"
+              value={note}
+              onChangeText={setNote}
+            />
+          </View>
+
+          {/* Actions Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardSectionTitle}>ADMINISTRATIVE ACTIONS</Text>
+
+            {actionLoading && <ActivityIndicator color="#5288c1" style={{ marginBottom: 12 }} />}
+
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={handleToggleBan}
+              disabled={actionLoading}
+            >
+              <Ionicons
+                name={user.isBanned ? 'checkmark-circle-outline' : 'ban-outline'}
+                size={20}
+                color={user.isBanned ? '#4dbd74' : '#e53935'}
+              />
+              <Text style={[styles.actionRowText, { color: user.isBanned ? '#4dbd74' : '#e53935' }]}>
+                {user.isBanned ? 'Unban User' : 'Ban User'}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#708499" />
+            </TouchableOpacity>
+
+            {showUnlockBtn && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={handleUnlock}
+                disabled={actionLoading}
+              >
+                <Ionicons name="key-outline" size={20} color="#ffa726" />
+                <Text style={[styles.actionRowText, { color: '#ffa726' }]}>Unlock Account</Text>
+                <Ionicons name="chevron-forward" size={18} color="#708499" />
+              </TouchableOpacity>
+            )}
+
+            {isSuperAdmin && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => navigation.navigate('PromoteToAdmin', { user })}
+                disabled={actionLoading}
+              >
+                <Ionicons name="arrow-up-circle-outline" size={20} color="#5288c1" />
+                <Text style={[styles.actionRowText, { color: '#5288c1' }]}>Promote to Admin</Text>
+                <Ionicons name="chevron-forward" size={18} color="#708499" />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.actionRow, { borderBottomWidth: 0 }]}
+              onPress={handleDelete}
+              disabled={actionLoading}
+            >
+              <Ionicons name="trash-outline" size={20} color="#e53935" />
+              <Text style={[styles.actionRowText, { color: '#e53935' }]}>Delete Account</Text>
+              <Ionicons name="chevron-forward" size={18} color="#708499" />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
-
-      <ScrollView contentContainerStyle={styles.body}>
-        {/* Info Card */}
-        <View style={styles.card}>
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.roleText}>{user.role.toUpperCase()}</Text>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Phone:</Text>
-            <Text style={styles.infoValue}>{user.phone || '—'}</Text>
-          </View>
-          {user.email ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Email:</Text>
-              <Text style={styles.infoValue}>{user.email}</Text>
-            </View>
-          ) : null}
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Status:</Text>
-            <Text style={[styles.infoValue, { textTransform: 'capitalize' }]}>{user.status}</Text>
-          </View>
-
-          {user.subject ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Subject:</Text>
-              <Text style={styles.infoValue}>{user.subject}</Text>
-            </View>
-          ) : user.classGrade ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Class/Grade:</Text>
-              <Text style={styles.infoValue}>{user.classGrade}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Lock Status:</Text>
-            <Text style={styles.infoValue}>{user.isLocked ? 'Locked 🔒' : 'Active 🔓'}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Banned:</Text>
-            <Text style={[styles.infoValue, user.isBanned && { color: '#ef4444' }]}>
-              {user.isBanned ? 'Yes 🚫' : 'No'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Note Box */}
-        <View style={styles.noteContainer}>
-          <Text style={styles.noteTitle}>Action Note (Stored in audit log)</Text>
-          <TextInput
-            style={styles.noteInput}
-            placeholder="Type reason here..."
-            placeholderTextColor="#475569"
-            value={note}
-            onChangeText={setNote}
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        {/* Action Section */}
-        <View style={styles.actions}>
-          {actionLoading && <ActivityIndicator color="#2563eb" style={{ marginBottom: 12 }} />}
-
-          <TouchableOpacity
-            style={[styles.btn, user.isBanned ? styles.unbanBtn : styles.banBtn]}
-            onPress={handleToggleBan}
-            disabled={actionLoading}
-          >
-            <Text style={styles.btnText}>{user.isBanned ? 'Unban User' : 'Ban User'}</Text>
-          </TouchableOpacity>
-
-          {showUnlockBtn && (
-            <TouchableOpacity
-              style={[styles.btn, styles.unlockBtn]}
-              onPress={handleUnlock}
-              disabled={actionLoading}
-            >
-              <Text style={styles.btnText}>Unlock Account</Text>
-            </TouchableOpacity>
-          )}
-
-          {isSuperAdmin && (
-            <TouchableOpacity
-              style={[styles.btn, styles.promoteBtn]}
-              onPress={() => navigation.navigate('PromoteToAdmin', { user })}
-              disabled={actionLoading}
-            >
-              <Text style={styles.btnText}>Promote to Admin</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.btn, styles.deleteBtn]}
-            onPress={handleDelete}
-            disabled={actionLoading}
-          >
-            <Text style={styles.btnText}>Delete User Account</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#111827',
-    paddingTop: 52,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+  root: {
+    flex: 1,
+    backgroundColor: '#17212b',
   },
-  backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#f1f5f9' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0e1a' },
-  errorText: { color: '#ef4444', fontSize: 16, marginBottom: 16 },
-  backButton: { backgroundColor: '#111827', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  backButtonText: { color: '#f1f5f9', fontWeight: '600' },
-  body: { padding: 16, paddingBottom: 40 },
-  card: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#1e293b',
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#17212b',
+    padding: 24,
+  },
+  errorText: {
+    color: '#e53935',
+    fontSize: 14,
     marginBottom: 16,
   },
-  name: { fontSize: 20, fontWeight: '800', color: '#f1f5f9' },
-  roleText: { fontSize: 12, fontWeight: '700', color: '#2563eb', marginTop: 4, marginBottom: 16 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1e293b' },
-  infoLabel: { color: '#64748b', fontSize: 14 },
-  infoValue: { color: '#f1f5f9', fontSize: 14, fontWeight: '600' },
-  noteContainer: { marginBottom: 20 },
-  noteTitle: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 8 },
-  noteInput: {
-    backgroundColor: '#111827',
+  backBtn: {
+    backgroundColor: '#2b3a4b',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    padding: 12,
-    color: '#f1f5f9',
-    fontSize: 14,
-    minHeight: 60,
   },
-  actions: { gap: 10 },
-  btn: { paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
-  btnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  banBtn: { backgroundColor: '#ef4444' },
-  unbanBtn: { backgroundColor: '#10b981' },
-  unlockBtn: { backgroundColor: '#2563eb' },
-  promoteBtn: { backgroundColor: '#2563eb' },
-  deleteBtn: { backgroundColor: '#ef4444' },
+  backBtnText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  body: {
+    paddingBottom: 40,
+  },
+  profileHeader: {
+    backgroundColor: '#17212b',
+    alignItems: 'center',
+    paddingVertical: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
+  },
+  backIcon: {
+    position: 'absolute',
+    left: 16,
+    top: 20,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginTop: 12,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  card: {
+    backgroundColor: '#232e3c',
+    borderRadius: 10,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+  },
+  cardSectionTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#708499',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
+  },
+  infoLabel: {
+    color: '#708499',
+    fontSize: 14,
+  },
+  infoValue: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  noteInput: {
+    backgroundColor: '#2b3a4b',
+    borderRadius: 10,
+    height: 44,
+    paddingHorizontal: 16,
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
+  },
+  actionRowText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 12,
+  },
 });

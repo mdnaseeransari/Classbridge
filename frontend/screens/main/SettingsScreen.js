@@ -9,11 +9,13 @@ import {
   StatusBar,
   ScrollView,
   Switch,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
-import { COLORS, SPACING, RADIUS } from '../../theme';
+import Avatar from '../../components/ui/Avatar';
+import RoleBadge from '../../components/ui/RoleBadge';
 
 export default function SettingsScreen({ navigation }) {
   const { user, logout, setUser } = useContext(AuthContext);
@@ -29,21 +31,6 @@ export default function SettingsScreen({ navigation }) {
   const [changingPassword, setChangingPassword] = useState(false);
   const [securityError, setSecurityError] = useState('');
   const [securitySuccess, setSecuritySuccess] = useState('');
-
-  const getRoleColors = (role) => {
-    switch (role) {
-      case 'superadmin':
-        return ['#8b5cf6', '#a78bfa'];
-      case 'admin':
-        return ['#2563eb', '#3b82f6'];
-      case 'teacher':
-        return ['#10b981', '#34d399'];
-      default:
-        return ['#f59e0b', '#fbbf24'];
-    }
-  };
-
-  const roleColors = getRoleColors(user?.role);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -97,261 +84,288 @@ export default function SettingsScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0e1a" />
-      
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+
       {/* Header */}
       <View style={styles.header}>
         {navigation.canGoBack() ? (
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="arrow-back" size={20} color="#2563eb" />
-            <Text style={styles.backText}>Back</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 60 }} />
+          <View style={{ width: 24 }} />
         )}
         <Text style={styles.headerTitle}>Settings</Text>
-        <View style={{ width: 60 }} />
+        <TouchableOpacity onPress={logout}>
+          <Text style={styles.logoutText}>Log Out</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={[styles.avatar, { backgroundColor: roleColors[0] }]}>
-            <Text style={styles.avatarText}>{user?.name[0]?.toUpperCase()}</Text>
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          {/* Profile Banner */}
+          <View style={styles.profileBanner}>
+            <Avatar name={user?.name || 'User'} role={user?.role} size="large" />
+            <Text style={styles.profileName}>{user?.name}</Text>
+            <View style={{ marginTop: 6 }}>
+              <RoleBadge role={user?.role} />
+            </View>
           </View>
-          <Text style={styles.profileName}>{user?.name}</Text>
-          <Text style={styles.profileRole}>{user?.role?.toUpperCase()}</Text>
-        </View>
 
-        {/* Form */}
-        <Text style={styles.sectionTitle}>Profile Details</Text>
-        
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="Name"
-            placeholderTextColor="#64748b"
-          />
-        </View>
+          {/* Profile Section */}
+          <Text style={styles.sectionHeader}>PROFILE DETAILS</Text>
+          <View style={styles.card}>
+            <Text style={styles.label}>FULL NAME</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Name"
+              placeholderTextColor="#708499"
+            />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="Phone number"
-            placeholderTextColor="#64748b"
-            keyboardType="phone-pad"
-          />
-        </View>
+            <Text style={styles.label}>PHONE NUMBER</Text>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="Phone number"
+              placeholderTextColor="#708499"
+              keyboardType="phone-pad"
+            />
 
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Email</Text>
-          <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
-        </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Email</Text>
+              <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
+            </View>
 
-        {user?.subject && (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Subject</Text>
-            <Text style={styles.infoValue}>{user.subject}</Text>
+            {user?.subject && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Subject</Text>
+                <Text style={styles.infoValue}>{user.subject}</Text>
+              </View>
+            )}
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {success ? <Text style={styles.successText}>{success}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.btn, saving && styles.btnDisabled]}
+              onPress={handleSave}
+              disabled={saving}
+              activeOpacity={0.8}
+            >
+              {saving ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.btnText}>Save Profile Changes</Text>}
+            </TouchableOpacity>
           </View>
-        )}
 
-        {/* Notifications & Toggles */}
-        <Text style={styles.sectionTitle}>Preferences</Text>
-        
-        <View style={styles.toggleRow}>
-          <View>
-            <Text style={styles.toggleTitle}>Mute Notifications</Text>
-            <Text style={styles.toggleDesc}>Temporarily silence app alerts</Text>
+          {/* Preferences Section */}
+          <Text style={styles.sectionHeader}>PREFERENCES</Text>
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleTitle}>Mute Notifications</Text>
+                <Text style={styles.toggleDesc}>Temporarily silence app alerts</Text>
+              </View>
+              <Switch
+                value={muteNotifications}
+                onValueChange={setMuteNotifications}
+                trackColor={{ false: '#2b3a4b', true: '#5288c1' }}
+                thumbColor="#ffffff"
+              />
+            </View>
           </View>
-          <Switch
-            value={muteNotifications}
-            onValueChange={setMuteNotifications}
-            trackColor={{ false: '#1e293b', true: '#2563eb' }}
-            thumbColor={muteNotifications ? '#ffffff' : '#64748b'}
-          />
-        </View>
 
-        {/* Security / Password reset */}
-        <Text style={styles.sectionTitle}>Security</Text>
-        <View style={styles.securityBox}>
-          <Text style={styles.label}>
-            {['teacher', 'student'].includes(user?.role) ? 'Current 6-Digit PIN' : 'Current Password'}
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={oldCredential}
-            onChangeText={setOldCredential}
-            placeholder={['teacher', 'student'].includes(user?.role) ? '123456' : '••••••••'}
-            placeholderTextColor="#64748b"
-            secureTextEntry={!['teacher', 'student'].includes(user?.role)}
-            keyboardType={['teacher', 'student'].includes(user?.role) ? 'numeric' : 'default'}
-          />
+          {/* Security Section */}
+          <Text style={styles.sectionHeader}>SECURITY</Text>
+          <View style={styles.card}>
+            <Text style={styles.label}>
+              {['teacher', 'student'].includes(user?.role) ? 'CURRENT 6-DIGIT PIN' : 'CURRENT PASSWORD'}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={oldCredential}
+              onChangeText={setOldCredential}
+              placeholder={['teacher', 'student'].includes(user?.role) ? '123456' : '••••••••'}
+              placeholderTextColor="#708499"
+              secureTextEntry={!['teacher', 'student'].includes(user?.role)}
+              keyboardType={['teacher', 'student'].includes(user?.role) ? 'numeric' : 'default'}
+            />
 
-          <View style={{ height: 12 }} />
+            <Text style={styles.label}>
+              {['teacher', 'student'].includes(user?.role) ? 'NEW 6-DIGIT PIN' : 'NEW PASSWORD'}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={newCredential}
+              onChangeText={setNewCredential}
+              placeholder={['teacher', 'student'].includes(user?.role) ? '654321' : '••••••••'}
+              placeholderTextColor="#708499"
+              secureTextEntry={!['teacher', 'student'].includes(user?.role)}
+              keyboardType={['teacher', 'student'].includes(user?.role) ? 'numeric' : 'default'}
+            />
 
-          <Text style={styles.label}>
-            {['teacher', 'student'].includes(user?.role) ? 'New 6-Digit PIN' : 'New Password'}
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={newCredential}
-            onChangeText={setNewCredential}
-            placeholder={['teacher', 'student'].includes(user?.role) ? '654321' : '••••••••'}
-            placeholderTextColor="#64748b"
-            secureTextEntry={!['teacher', 'student'].includes(user?.role)}
-            keyboardType={['teacher', 'student'].includes(user?.role) ? 'numeric' : 'default'}
-          />
+            {securityError ? <Text style={styles.errorText}>{securityError}</Text> : null}
+            {securitySuccess ? <Text style={styles.successText}>{securitySuccess}</Text> : null}
 
-          {securityError ? <Text style={[styles.errorText, { marginTop: 10, marginBottom: 0 }]}>{securityError}</Text> : null}
-          {securitySuccess ? <Text style={[styles.successText, { marginTop: 10, marginBottom: 0 }]}>{securitySuccess}</Text> : null}
-
-          <TouchableOpacity
-            style={[styles.saveBtn, { marginTop: 16, backgroundColor: '#0284c7' }, changingPassword && { opacity: 0.6 }]}
-            onPress={handleChangePassword}
-            disabled={changingPassword}
-          >
-            {changingPassword ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Update Password/PIN</Text>}
-          </TouchableOpacity>
-        </View>
-
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {success ? <Text style={styles.successText}>{success}</Text> : null}
-
-        {/* Action Buttons */}
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-          <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-          <Text style={styles.logoutBtnText}>Log Out</Text>
-        </TouchableOpacity>
-
-      </ScrollView>
+            <TouchableOpacity
+              style={[styles.btn, changingPassword && styles.btnDisabled]}
+              onPress={handleChangePassword}
+              disabled={changingPassword}
+              activeOpacity={0.8}
+            >
+              {changingPassword ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.btnText}>Update Password / PIN</Text>}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
+  root: {
+    flex: 1,
+    backgroundColor: '#17212b',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#17212b',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
+  },
   header: {
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#111827',
-    paddingTop: 52,
-    paddingBottom: 14,
+    justifyContent: 'space-between',
+    backgroundColor: '#17212b',
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#0e1621',
   },
-  backText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#f1f5f9' },
-  body: { padding: 20, paddingBottom: 40 },
-  profileCard: {
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  logoutText: {
+    color: '#e53935',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  body: {
+    paddingBottom: 40,
+  },
+  profileBanner: {
+    backgroundColor: '#17212b',
     alignItems: 'center',
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    marginBottom: 24,
+    paddingVertical: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatarText: { fontSize: 32, fontWeight: '800', color: '#ffffff' },
-  profileName: { fontSize: 20, fontWeight: '800', color: '#f1f5f9' },
-  profileRole: { fontSize: 12, fontWeight: '700', color: '#64748b', marginTop: 4, letterSpacing: 1 },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
+  profileName: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
     marginTop: 12,
   },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 12, color: '#64748b', marginBottom: 6, fontWeight: '600' },
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#708499',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 20,
+    marginBottom: 8,
+    marginHorizontal: 16,
+  },
+  card: {
+    backgroundColor: '#232e3c',
+    borderRadius: 10,
+    marginHorizontal: 16,
+    padding: 16,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#708499',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginTop: 12,
+  },
   input: {
-    backgroundColor: '#111827',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    padding: 12,
-    color: '#f1f5f9',
-    fontSize: 15,
+    backgroundColor: '#2b3a4b',
+    borderRadius: 10,
+    height: 44,
+    paddingHorizontal: 16,
+    color: '#ffffff',
+    fontSize: 14,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-    marginBottom: 16,
+    borderBottomColor: '#0e1621',
+    marginTop: 8,
   },
-  infoLabel: { fontSize: 14, color: '#64748b', fontWeight: '500' },
-  infoValue: { fontSize: 14, color: '#f1f5f9', fontWeight: '600' },
+  infoLabel: {
+    fontSize: 14,
+    color: '#708499',
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
   toggleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    marginBottom: 24,
+    paddingVertical: 4,
   },
-  securityBox: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    marginBottom: 24,
+  toggleTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#ffffff',
   },
-  toggleTitle: { fontSize: 15, fontWeight: '600', color: '#f1f5f9' },
-  toggleDesc: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  saveBtn: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 12,
+  toggleDesc: {
+    fontSize: 12,
+    color: '#708499',
+    marginTop: 2,
   },
-  saveBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  btn: {
+    backgroundColor: '#5288c1',
+    height: 44,
+    borderRadius: 10,
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: '#ef4444',
-    borderWidth: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
   },
-  logoutBtnText: { color: '#ef4444', fontSize: 15, fontWeight: '700' },
-  errorText: { color: '#ef4444', marginBottom: 14, textAlign: 'center', fontSize: 14 },
-  successText: { color: '#10b981', marginBottom: 14, textAlign: 'center', fontSize: 14 },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#e53935',
+    fontSize: 13,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  successText: {
+    color: '#4dbd74',
+    fontSize: 13,
+    marginTop: 10,
+    textAlign: 'center',
+  },
 });

@@ -67,15 +67,19 @@ function OfflineBanner() {
   );
 }
 
+import { Provider as PaperProvider, MD3DarkTheme } from 'react-native-paper';
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
-          <StatusBar style="light" />
-          <OfflineBanner />
-          <AppNavigator />
-        </NavigationContainer>
+        <PaperProvider theme={MD3DarkTheme}>
+          <NavigationContainer>
+            <StatusBar style="light" />
+            <OfflineBanner />
+            <AppNavigator />
+          </NavigationContainer>
+        </PaperProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

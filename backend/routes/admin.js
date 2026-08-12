@@ -17,6 +17,7 @@ const {
   listReports,
   getReportDetail,
   actionReport,
+  deleteReport,
   listResetRequests,
   resolveResetRequest,
 } = require('../controllers/adminController');
@@ -166,6 +167,7 @@ router.get('/reports/:id', getReportDetail);
  * @access  admin | superadmin
  */
 router.patch('/reports/:id/action', actionReport);
+router.delete('/reports/:id', deleteReport);
 
 // ─── Password Reset Request Queue & Actions ─────────────────────────────────────
 
