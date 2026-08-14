@@ -95,6 +95,9 @@ export default function App() {
           anticon: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf'),
           AntDesign: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf'),
         });
+        if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
+        }
       } catch (_e) {
         // silent fail
       } finally {
