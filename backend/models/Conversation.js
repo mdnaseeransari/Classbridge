@@ -71,6 +71,13 @@ const conversationSchema = new mongoose.Schema(
       maxlength: 300,
       default: null,
     },
+    hiddenFor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: undefined,
+      },
+    ],
   },
   { timestamps: true }
 );

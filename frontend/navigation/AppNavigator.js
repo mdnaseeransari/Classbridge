@@ -79,12 +79,15 @@ function UserStackNavigator() {
   );
 }
 
+import WebTabBar from '../components/ui/WebTabBar';
+
 function UserTabNavigator() {
   const { navigatePanel } = usePanel();
 
   return (
     <Tab.Navigator
       initialRouteName={Platform.OS === 'web' ? 'Chat' : 'Home'}
+      tabBar={Platform.OS === 'web' ? (props) => <WebTabBar {...props} /> : undefined}
       screenOptions={{
         headerShown: false,
         tabBarStyle: { backgroundColor: '#111827', borderTopColor: '#1e293b', height: 60, paddingBottom: 8, paddingTop: 6 },
@@ -133,6 +136,7 @@ function AdminTabNavigator() {
   return (
     <Tab.Navigator
       initialRouteName={Platform.OS === 'web' ? 'Chat' : 'AdminDashboard'}
+      tabBar={Platform.OS === 'web' ? (props) => <WebTabBar {...props} /> : undefined}
       screenOptions={{
         headerShown: false,
         tabBarStyle: { backgroundColor: '#111827', borderTopColor: '#1e293b', height: 60, paddingBottom: 8, paddingTop: 6 },

@@ -120,6 +120,7 @@ async function listConversations(req, res) {
     const isArchivedQuery = archived === 'true';
     const query = {
       participants: callerId,
+      hiddenFor: { $ne: callerId },
       _id: isArchivedQuery ? { $in: archivedIds } : { $nin: archivedIds }
     };
 
@@ -1297,6 +1298,34 @@ async function searchMessages(req, res) {
   }
 }
 
+const hideConversation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const callerId = req.user.id;
+    const conversation = await Conversation.findOne({
+      _id: id,
+      participants: callerId,
+    });
+    if (!conversation) {
+      return res.status(404).json({ 
+        error: 'Conversation not found.' 
+      });
+    }
+    await Conversation.findByIdAndUpdate(id, {
+      $addToSet: { hiddenFor: callerId },
+    });
+    return res.status(200).json({ 
+      message: 'Conversation hidden.' 
+    });
+  } catch (err) {
+    console.error('[CHAT] hideConversation error:', 
+      err.message);
+    return res.status(500).json({ 
+      error: 'Internal server error.' 
+    });
+  }
+};
+
 module.exports = {
   getOrCreateDirect,
   listConversations,
@@ -1324,5 +1353,7 @@ module.exports = {
   muteConversation,
   unmuteConversation,
   searchMessages,
+  hideConversation,
 };
+
 

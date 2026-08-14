@@ -29,6 +29,7 @@ const {
   muteConversation,
   unmuteConversation,
   searchMessages,
+  hideConversation,
 } = require('../controllers/chatController');
 
 const router = express.Router();
@@ -127,6 +128,13 @@ router.post('/conversations/:id/unmute', validateObjectId('id'), unmuteConversat
  * @access  Any participant
  */
 router.get('/conversations/:id/search', validateObjectId('id'), searchMessages);
+
+/**
+ * @route   DELETE /api/chat/conversations/:id/hide
+ * @desc    Hide a conversation from the caller's conversation list.
+ * @access  Any participant
+ */
+router.delete('/conversations/:id/hide', validateObjectId('id'), hideConversation);
 
 // ─── Group Management (Admin / Super Admin ONLY) ──────────────────────────────
 

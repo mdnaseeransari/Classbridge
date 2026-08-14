@@ -81,6 +81,7 @@ export default function App() {
       try {
         // Step 1: Load critical primary icon fonts first for instant app launch (< 80ms)
         await Font.loadAsync({
+          ...Ionicons.font,
           ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
           Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
           material: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf'),

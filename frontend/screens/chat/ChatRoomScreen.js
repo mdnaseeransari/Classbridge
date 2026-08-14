@@ -25,9 +25,49 @@ import { getSocket } from '../../services/socket';
 import * as ImagePicker from 'expo-image-picker';
 import OfflineBanner from '../../components/ui/OfflineBanner';
 import * as DocumentPicker from 'expo-document-picker';
+import storage from '../../services/storage';
 import Avatar from '../../components/ui/Avatar';
 
 const EMOJIS = ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'];
+
+const GROUP_COLORS = [
+  '#e17076', '#7bc862', '#65aadd', '#a695e7',
+  '#ee7aae', '#6ec9cb', '#faa774', '#5b9dc8',
+];
+
+const getSenderColor = (userId) => {
+  if (!userId) return GROUP_COLORS[0];
+  let hash = 0;
+  const str = String(userId);
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
+};
+
+const formatDividerDate = (dateStr) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const todayStart = new Date(
+    now.getFullYear(), now.getMonth(), now.getDate()
+  );
+  const yesterdayStart = new Date(
+    todayStart.getTime() - 86400000
+  );
+  const weekStart = new Date(
+    todayStart.getTime() - 6 * 86400000
+  );
+  if (date >= todayStart) return 'Today';
+  if (date >= yesterdayStart) return 'Yesterday';
+  if (date >= weekStart) {
+    return date.toLocaleDateString([], { 
+      weekday: 'long' 
+    });
+  }
+  return date.toLocaleDateString([], { 
+    day: 'numeric', month: 'long', year: 'numeric' 
+  });
+};
 
 /** Subtle dot-grid wallpaper rendered behind the chat messages */
 const WallpaperBackground = () => {
@@ -73,6 +113,52 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
   const [animatingDeleteIds, setAnimatingDeleteIds] = useState(new Set());
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+
+  const sendBtnScale = useRef(new Animated.Value(
+    inputText.trim().length > 0 ? 1 : 0.8
+  )).current;
+
+  useEffect(() => {
+    Animated.spring(sendBtnScale, {
+      toValue: inputText.trim().length > 0 ? 1 : 0.8,
+      useNativeDriver: true,
+      friction: 6,
+    }).start();
+  }, [inputText]);
+
+  useEffect(() => {
+    const restoreDraft = async () => {
+      try {
+        const draft = await storage.getItem(`draft_${conversationId}`);
+        if (draft && !inputText) {
+          setInputText(draft);
+        }
+      } catch (_) {}
+    };
+    restoreDraft();
+  }, [conversationId]);
+
+  const draftTimerRef = useRef(null);
+  useEffect(() => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+    }
+    draftTimerRef.current = setTimeout(async () => {
+      try {
+        if (inputText.trim()) {
+          await storage.setItem(`draft_${conversationId}`, inputText);
+        } else {
+          await storage.setItem(`draft_${conversationId}`, '');
+        }
+      } catch (_) {}
+    }, 500);
+    return () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+      }
+    };
+  }, [inputText, conversationId]);
 
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
@@ -532,6 +618,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
 
     setReplyingTo(null);
     setInputText('');
+    storage.setItem(`draft_${conversationId}`, '').catch(() => {});
     handleTypingStop();
   };
 
@@ -750,43 +837,54 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     const formattedTime = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const isDeleting = animatingDeleteIds.has(item._id);
 
-    // Grouped bubble: list is inverted so index 0 = newest
-    // prevMsg = message displayed BELOW this one (older in array = newer index)
-    // nextMsg = message displayed ABOVE this one (newer in array = older index)
     const displayMessages = searchBarVisible && searchResults !== null ? searchResults : messages;
-    const prevMsg = displayMessages[index + 1]; // older in time (above visually)
-    const nextMsg = displayMessages[index - 1]; // newer in time (below visually)
+    const nextMsg = displayMessages[index + 1];
+    const showDivider = !nextMsg || new Date(item.createdAt).toDateString() !== new Date(nextMsg.createdAt).toDateString();
+
+    const DateDivider = showDivider ? (
+      <View style={styles.dateDividerWrapper}>
+        <View style={styles.dateDividerPill}>
+          <Text style={styles.dateDividerText}>
+            {formatDividerDate(item.createdAt)}
+          </Text>
+        </View>
+      </View>
+    ) : null;
+
+    const prevMsg = displayMessages[index + 1];
+    const nextMsgItem = displayMessages[index - 1];
     const isSameSenderAsPrev = prevMsg && prevMsg.sender?._id === item.sender?._id && !prevMsg.isDeleted;
-    const isSameSenderAsNext = nextMsg && nextMsg.sender?._id === item.sender?._id && !nextMsg.isDeleted;
-    const isGroupedTop = isSameSenderAsPrev;    // has a message above from same sender
-    const isGroupedBottom = isSameSenderAsNext; // has a message below from same sender
+    const isSameSenderAsNext = nextMsgItem && nextMsgItem.sender?._id === item.sender?._id && !nextMsgItem.isDeleted;
+    const isGroupedTop = isSameSenderAsPrev;
+    const isGroupedBottom = isSameSenderAsNext;
 
     if (item.isDeleted) {
       return (
-        <AnimatedBubbleWrapper isDeleting={isDeleting}>
-          <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft, isGroupedBottom && { marginBottom: 2 }]}>
-            {isGroup && !isSelf && !isGroupedTop && <Text style={styles.senderName}>{item.sender?.name}</Text>}
-            <View style={[styles.bubble, styles.bubbleDeleted]}>
-              <Text style={styles.textDeleted}>
-                {isGroup
-                  ? `This message was deleted by ${item.deletedBy?._id === user?._id ? 'you' : (item.deletedBy?.name || 'someone')}`
-                  : 'This message was deleted'}
-              </Text>
-              <View style={styles.bubbleFooter}>
-                <Text style={[styles.bubbleTime, { color: '#64748b' }]}>{formattedTime}</Text>
+        <React.Fragment>
+          <AnimatedBubbleWrapper isDeleting={isDeleting}>
+            <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft, isGroupedBottom && { marginBottom: 2 }, highlightedMsgId === item._id && { backgroundColor: 'rgba(82, 136, 193, 0.25)', borderRadius: 16 }]}>
+              {isGroup && !isSelf && !isGroupedTop && <Text style={[styles.senderName, { color: getSenderColor(item.sender?._id) }]}>{item.sender?.name}</Text>}
+              <View style={[styles.bubble, styles.bubbleDeleted]}>
+                <Text style={styles.textDeleted}>
+                  {isGroup
+                    ? `This message was deleted by ${item.deletedBy?._id === user?._id ? 'you' : (item.deletedBy?.name || 'someone')}`
+                    : 'This message was deleted'}
+                </Text>
+                <View style={styles.bubbleFooter}>
+                  <Text style={[styles.bubbleTime, { color: '#64748b' }]}>{formattedTime}</Text>
+                </View>
               </View>
             </View>
-          </View>
-        </AnimatedBubbleWrapper>
+          </AnimatedBubbleWrapper>
+          {DateDivider}
+        </React.Fragment>
       );
     }
 
-    // Compute grouped corner radii
     const FULL = 16;
     const FLAT = 4;
     let bubbleGroupStyle = {};
     if (isSelf) {
-      // Self: tail at bottom-right; flatten top-right when grouped top, flatten bottom-right when grouped bottom
       bubbleGroupStyle = {
         borderTopLeftRadius: FULL,
         borderTopRightRadius: isGroupedTop ? FLAT : FULL,
@@ -794,7 +892,6 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         borderBottomRightRadius: isGroupedBottom ? FLAT : FLAT,
       };
     } else {
-      // Other: tail at bottom-left; flatten top-left when grouped top, flatten bottom-left when grouped bottom
       bubbleGroupStyle = {
         borderTopLeftRadius: isGroupedTop ? FLAT : FULL,
         borderTopRightRadius: FULL,
@@ -804,149 +901,170 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
     }
 
     return (
-      <AnimatedBubbleWrapper isDeleting={isDeleting}>
-        <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft, isGroupedBottom && { marginBottom: 2 }]}>
-          {isGroup && !isSelf && !isGroupedTop && <Text style={styles.senderName}>{item.sender?.name}</Text>}
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              {...getMessagePressProps(item)}
-              style={{ flexShrink: 1 }}
-            >
-              <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther, bubbleGroupStyle]}>
-                {item.forwardedFrom && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
-                    <Ionicons name="share-social-outline" size={10} color={isSelf ? 'rgba(255, 255, 255, 0.7)' : '#64748b'} />
-                    <Text style={[styles.forwardedIndicator, isSelf ? styles.timeSelf : styles.timeOther, { marginBottom: 0 }]}>
-                      Forwarded
-                    </Text>
-                  </View>
-                )}
+      <React.Fragment>
+        <AnimatedBubbleWrapper isDeleting={isDeleting}>
+          <View style={[styles.bubbleWrapper, isSelf ? styles.bubbleRight : styles.bubbleLeft, isGroupedBottom && { marginBottom: 2 }, highlightedMsgId === item._id && { backgroundColor: 'rgba(82, 136, 193, 0.25)', borderRadius: 16 }]}>
+            {isGroup && !isSelf && !isGroupedTop && <Text style={[styles.senderName, { color: getSenderColor(item.sender?._id) }]}>{item.sender?.name}</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                {...getMessagePressProps(item)}
+                style={{ flexShrink: 1 }}
+              >
+                <View style={[styles.bubble, isSelf ? styles.bubbleSelf : styles.bubbleOther, bubbleGroupStyle]}>
+                  {item.forwardedFrom && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                      <Ionicons name="share-social-outline" size={10} color={isSelf ? 'rgba(255, 255, 255, 0.7)' : '#64748b'} />
+                      <Text style={[styles.forwardedIndicator, isSelf ? styles.timeSelf : styles.timeOther, { marginBottom: 0 }]}>
+                        Forwarded
+                      </Text>
+                    </View>
+                  )}
 
-                {item.replyTo && (
-                  <View style={styles.replyQuoteBox}>
-                    <Text style={styles.replyQuoteSender}>
-                      {item.replyTo.sender?.name || 'User'}
-                    </Text>
-                    <Text style={styles.replyQuoteContent} numberOfLines={1}>
-                      {item.replyTo.type === 'file' ? `📁 ${item.replyTo.fileName || 'Attachment'}` : item.replyTo.content}
-                    </Text>
-                  </View>
-                )}
-
-                {item.type === 'file' ? (() => {
-                  const isImage = item.fileMimeType && item.fileMimeType.startsWith('image/');
-                  if (isImage && item.fileUrl) {
-                    return (
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        onPress={() => setImageViewerUrl(item.fileUrl)}
-                        style={styles.imageBubble}
-                      >
-                        <Image
-                          source={{ uri: item.fileUrl }}
-                          style={styles.imageBubbleImg}
-                          resizeMode="cover"
-                        />
-                        {item.content && item.content !== item.fileName && (
-                          <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther, { marginTop: 6 }]}>
-                            {item.content}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  }
-                  // Non-image file — show download row
-                  return (
+                  {item.replyTo && (
                     <TouchableOpacity
-                      style={styles.fileRow}
+                      style={styles.replyQuoteBox}
                       activeOpacity={0.8}
                       onPress={() => {
-                        if (item.fileUrl) {
-                          Linking.openURL(item.fileUrl).catch(() => { });
+                        const targetId = item.replyTo?._id;
+                        if (!targetId || !flatListRef.current) return;
+                        const displayMsgs = searchBarVisible && searchResults !== null ? searchResults : messages;
+                        const idx = displayMsgs.findIndex(m => m._id === targetId);
+                        if (idx === -1) return;
+                        try {
+                          flatListRef.current.scrollToIndex({
+                            index: idx,
+                            animated: true,
+                            viewPosition: 0.5,
+                          });
+                        } catch (_) {
+                          flatListRef.current.scrollToEnd({ animated: true });
                         }
+                        setHighlightedMsgId(targetId);
+                        setTimeout(() => setHighlightedMsgId(null), 1500);
                       }}
                     >
-                      <View style={[styles.fileIconBox, isSelf && { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
-                        <Ionicons name="document-outline" size={24} color={isSelf ? '#ffffff' : '#38bdf8'} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.fileRowName, isSelf ? styles.textSelf : styles.textOther]} numberOfLines={2}>
-                          {item.fileName || 'Document'}
-                        </Text>
-                        {item.fileMimeType && (
-                          <Text style={[styles.fileRowMeta, isSelf ? { color: 'rgba(255,255,255,0.55)' } : {}]}>
-                            {item.fileMimeType.split('/')[1]?.toUpperCase() || 'FILE'}
-                          </Text>
-                        )}
-                      </View>
-                      <Ionicons name="download-outline" size={20} color={isSelf ? 'rgba(255,255,255,0.7)' : '#64748b'} />
+                      <Text style={styles.replyQuoteSender}>
+                        {item.replyTo.sender?.name || 'User'}
+                      </Text>
+                      <Text style={styles.replyQuoteContent} numberOfLines={1}>
+                        {item.replyTo.type === 'file' ? `📁 ${item.replyTo.fileName || 'Attachment'}` : item.replyTo.content}
+                      </Text>
                     </TouchableOpacity>
-                  );
-                })() : (
-                  <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther]}>{item.content}</Text>
-                )}
+                  )}
 
-
-                {/* Reactions badges */}
-                {item.reactions && item.reactions.length > 0 && (
-                  <View style={styles.reactionsRow}>
-                    {Object.entries(
-                      item.reactions.reduce((acc, curr) => {
-                        acc[curr.reaction] = (acc[curr.reaction] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).map(([emoji, count]) => {
-                      const userReacted = item.reactions.some(r => String(r.user) === String(user?._id) && r.reaction === emoji);
+                  {item.type === 'file' ? (() => {
+                    const isImage = item.fileMimeType && item.fileMimeType.startsWith('image/');
+                    if (isImage && item.fileUrl) {
                       return (
                         <TouchableOpacity
-                          key={emoji}
-                          style={[styles.reactionBadge, userReacted && { borderColor: '#2563eb', borderWidth: 1 }]}
-                          onPress={() => {
-                            if (userReacted) {
-                              socketRef.current?.emit('remove_reaction', { messageId: item._id });
-                            } else {
-                              socketRef.current?.emit('add_reaction', { messageId: item._id, reaction: emoji });
-                            }
-                          }}
+                          activeOpacity={0.9}
+                          onPress={() => setImageViewerUrl(item.fileUrl)}
+                          style={styles.imageBubble}
                         >
-                          <Text style={styles.reactionEmoji}>{emoji} {count}</Text>
+                          <Image
+                            source={{ uri: item.fileUrl }}
+                            style={styles.imageBubbleImg}
+                            resizeMode="cover"
+                          />
+                          {item.content && item.content !== item.fileName && (
+                            <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther, { marginTop: 6 }]}>
+                              {item.content}
+                            </Text>
+                          )}
                         </TouchableOpacity>
                       );
-                    })}
-                  </View>
-                )}
-
-                <View style={styles.bubbleFooter}>
-                  {item.isEdited && (
-                    <Text style={[styles.editedLabel, isSelf ? styles.timeSelf : styles.timeOther]}>edited </Text>
+                    }
+                    return (
+                      <TouchableOpacity
+                        style={styles.fileRow}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          if (item.fileUrl) {
+                            Linking.openURL(item.fileUrl).catch(() => { });
+                          }
+                        }}
+                      >
+                        <View style={[styles.fileIconBox, isSelf && { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
+                          <Ionicons name="document-outline" size={24} color={isSelf ? '#ffffff' : '#38bdf8'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.fileRowName, isSelf ? styles.textSelf : styles.textOther]} numberOfLines={2}>
+                            {item.fileName || 'Document'}
+                          </Text>
+                          {item.fileMimeType && (
+                            <Text style={[styles.fileRowMeta, isSelf ? { color: 'rgba(255,255,255,0.55)' } : {}]}>
+                              {item.fileMimeType.split('/')[1]?.toUpperCase() || 'FILE'}
+                            </Text>
+                          )}
+                        </View>
+                        <Ionicons name="download-outline" size={20} color={isSelf ? 'rgba(255,255,255,0.7)' : '#64748b'} />
+                      </TouchableOpacity>
+                    );
+                  })() : (
+                    <Text style={[styles.bubbleText, isSelf ? styles.textSelf : styles.textOther]}>{item.content}</Text>
                   )}
-                  <Text style={[styles.bubbleTime, isSelf ? styles.timeSelf : styles.timeOther]}>
-                    {formattedTime}
-                  </Text>
-                  {isSelf && (() => {
-                    const isRead = item.readBy && item.readBy.some((r) => String(r.user) !== String(user?._id));
-                    const isDelivered = item.deliveredTo && item.deliveredTo.some((d) => String(d.user) !== String(user?._id));
-                    if (isRead) {
-                      return <Ionicons name="checkmark-done" size={13} color="#38bdf8" style={{ marginLeft: 3 }} />;
-                    }
-                    if (isDelivered) {
-                      return <Ionicons name="checkmark-done" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginLeft: 3 }} />;
-                    }
-                    return <Ionicons name="checkmark" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginLeft: 3 }} />;
-                  })()}
+
+                  {item.reactions && item.reactions.length > 0 && (
+                    <View style={styles.reactionsRow}>
+                      {Object.entries(
+                        item.reactions.reduce((acc, curr) => {
+                          acc[curr.reaction] = (acc[curr.reaction] || 0) + 1;
+                          return acc;
+                        }, {})
+                      ).map(([emoji, count]) => {
+                        const userReacted = item.reactions.some(r => String(r.user) === String(user?._id) && r.reaction === emoji);
+                        return (
+                          <TouchableOpacity
+                            key={emoji}
+                            style={[styles.reactionBadge, userReacted && { borderColor: '#2563eb', borderWidth: 1 }]}
+                            onPress={() => {
+                              if (userReacted) {
+                                socketRef.current?.emit('remove_reaction', { messageId: item._id });
+                              } else {
+                                socketRef.current?.emit('add_reaction', { messageId: item._id, reaction: emoji });
+                              }
+                            }}
+                          >
+                            <Text style={styles.reactionEmoji}>{emoji} {count}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  <View style={styles.bubbleFooter}>
+                    {item.isEdited && (
+                      <Text style={[styles.editedLabel, isSelf ? styles.timeSelf : styles.timeOther]}>edited </Text>
+                    )}
+                    <Text style={[styles.bubbleTime, isSelf ? styles.timeSelf : styles.timeOther]}>
+                      {formattedTime}
+                    </Text>
+                    {isSelf && (() => {
+                      const isRead = item.readBy && item.readBy.some((r) => String(r.user) !== String(user?._id));
+                      const isDelivered = item.deliveredTo && item.deliveredTo.some((d) => String(d.user) !== String(user?._id));
+                      if (isRead) {
+                        return <Ionicons name="checkmark-done" size={13} color="#38bdf8" style={{ marginLeft: 3 }} />;
+                      }
+                      if (isDelivered) {
+                        return <Ionicons name="checkmark-done" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginLeft: 3 }} />;
+                      }
+                      return <Ionicons name="checkmark" size={13} color="rgba(255, 255, 255, 0.7)" style={{ marginLeft: 3 }} />;
+                    })()}
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleLongPress(item)}
-              style={styles.actionDotBtn}
-            >
-              <Text style={styles.actionDotText}>⋮</Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleLongPress(item)}
+                style={styles.actionDotBtn}
+              >
+                <Text style={styles.actionDotText}>⋮</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </AnimatedBubbleWrapper>
+        </AnimatedBubbleWrapper>
+        {DateDivider}
+      </React.Fragment>
     );
   };
 
@@ -1089,6 +1207,15 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         </View>
       )}
 
+      {/* Character Count Warning Bar */}
+      {inputText.length > 3500 && (
+        <View style={styles.charCountBar}>
+          <Text style={styles.charCountText}>
+            {4000 - inputText.length} characters remaining
+          </Text>
+        </View>
+      )}
+
       {/* Input Bar */}
       <View style={styles.inputBar}>
         <TouchableOpacity style={styles.iconBtn} onPress={handleAttachmentPress}>
@@ -1110,9 +1237,11 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
         </View>
 
         {inputText.trim().length > 0 || uploading ? (
-          <TouchableOpacity style={styles.sendCircleBtn} onPress={handleSend} activeOpacity={0.8}>
-            <Ionicons name="arrow-up" size={20} color="#ffffff" />
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: sendBtnScale }] }}>
+            <TouchableOpacity style={styles.sendCircleBtn} onPress={handleSend} activeOpacity={0.8}>
+              <Ionicons name="arrow-up" size={20} color="#ffffff" />
+            </TouchableOpacity>
+          </Animated.View>
         ) : (
           <TouchableOpacity style={styles.iconBtn} activeOpacity={0.8}>
             <Ionicons name="mic-outline" size={24} color="#708499" />
@@ -2172,6 +2301,34 @@ const styles = StyleSheet.create({
   sharedDocMeta: {
     fontSize: 11,
     color: '#64748b',
+  },
+  dateDividerWrapper: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  dateDividerPill: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  dateDividerText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  charCountBar: {
+    backgroundColor: '#232e3c',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#0e1621',
+    alignItems: 'flex-end',
+  },
+  charCountText: {
+    color: '#ffa726',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
 

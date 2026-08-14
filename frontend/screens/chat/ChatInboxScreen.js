@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,7 +11,10 @@ import {
   Platform,
   Modal,
   useWindowDimensions,
+  Animated,
+  Alert,
 } from 'react-native';
+import storage from '../../services/storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -35,6 +38,36 @@ import Avatar from '../../components/ui/Avatar';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 
+const SkeletonRow = ({ opacity }) => (
+  <View style={{
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    height: 72,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0e1621',
+  }}>
+    <Animated.View style={{
+      width: 48, height: 48, borderRadius: 24,
+      backgroundColor: '#1e293b',
+      opacity,
+    }} />
+    <View style={{ flex: 1, marginLeft: 12, gap: 8 }}>
+      <Animated.View style={{
+        height: 14, width: 120,
+        backgroundColor: '#1e293b',
+        borderRadius: 4, opacity,
+      }} />
+      <Animated.View style={{
+        height: 12, width: 180,
+        backgroundColor: '#1e293b',
+        borderRadius: 4, opacity,
+      }} />
+    </View>
+  </View>
+);
+
 export default function ChatInboxScreen({ route, navigation }) {
   const { user } = useContext(AuthContext);
   const rootNav = () => 
@@ -55,6 +88,97 @@ export default function ChatInboxScreen({ route, navigation }) {
   const [selectedConvo, setSelectedConvo] = useState(null);
   const [selectedConvoId, setSelectedConvoId] = useState(null);
   const [selectedConvoTitle, setSelectedConvoTitle] = useState('');
+  const [activeConvId, setActiveConvId] = useState(null);
+  const [drafts, setDrafts] = useState({});
+
+  const skeletonOpacity = useRef(
+    new Animated.Value(0.4)
+  ).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonOpacity, {
+          toValue: 0.8,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(skeletonOpacity, {
+          toValue: 0.4,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  useEffect(() => {
+    if (!conversations.length) return;
+    const loadDrafts = async () => {
+      const draftMap = {};
+      for (const c of conversations) {
+        try {
+          const d = await storage.getItem(`draft_${c._id}`);
+          if (d && d.trim()) draftMap[c._id] = d;
+        } catch (_) {}
+      }
+      setDrafts(draftMap);
+    };
+    loadDrafts();
+  }, [conversations]);
+
+  const formatConvTime = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(), now.getMonth(), now.getDate()
+    );
+    const yesterdayStart = new Date(
+      todayStart.getTime() - 86400000
+    );
+    const weekStart = new Date(
+      todayStart.getTime() - 6 * 86400000
+    );
+
+    if (date >= todayStart) {
+      return date.toLocaleTimeString([], { 
+        hour: '2-digit', minute: '2-digit' 
+      });
+    }
+    if (date >= yesterdayStart) return 'Yesterday';
+    if (date >= weekStart) {
+      return date.toLocaleDateString([], { 
+        weekday: 'short' 
+      });
+    }
+    return date.toLocaleDateString([], { 
+      day: 'numeric', month: 'short' 
+    });
+  };
+
+  const getPreviewText = (item) => {
+    const msg = item.lastMessage;
+    if (!msg) return 'No messages yet';
+    if (msg.isDeleted) return 'Message deleted';
+    if (msg.type === 'file') {
+      const isImg = msg.fileMimeType?.startsWith('image/');
+      return isImg ? 'Photo' : 'File';
+    }
+    const isGroup = item.type === 'group';
+    const isSelf = String(msg.sender?._id) === 
+      String(user?._id);
+    const preview = msg.content || '';
+    if (isGroup && msg.sender?.name) {
+      const name = isSelf ? 'You' : 
+        msg.sender.name.split(' ')[0];
+      return `${name}: ${preview}`;
+    }
+    if (isSelf) return `You: ${preview}`;
+    return preview;
+  };
 
   // Search state
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -272,9 +396,7 @@ export default function ChatInboxScreen({ route, navigation }) {
     }
 
     const unreadCount = item.unreadCount || 0;
-    const formattedTime = item.lastActivityAt
-      ? new Date(item.lastActivityAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : '';
+    const formattedTime = formatConvTime(item.lastActivityAt || item.updatedAt);
 
     const getPressProps = (convo) => {
       if (Platform.OS === 'web') {
@@ -292,9 +414,10 @@ export default function ChatInboxScreen({ route, navigation }) {
 
     return (
       <TouchableOpacity
-        style={styles.itemRow}
+        style={[styles.itemRow, activeConvId === item._id && { backgroundColor: '#2b3a4b' }]}
         activeOpacity={0.75}
         onPress={() => {
+          setActiveConvId(item._id);
           if (isLargeScreen) {
             setSelectedConvoId(item._id);
             setSelectedConvoTitle(title);
@@ -324,9 +447,30 @@ export default function ChatInboxScreen({ route, navigation }) {
           </View>
 
           <View style={styles.bottomRow}>
-            <Text style={styles.previewText} numberOfLines={1}>
-              {item.lastMessage?.content || (item.lastMessage?.type === 'file' ? '📁 Attachment' : 'No messages yet')}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+              {drafts[item._id] && (
+                <Text style={styles.draftLabel}>Draft: </Text>
+              )}
+              {String(item.lastMessage?.sender?._id) === String(user?._id) && (
+                <Ionicons
+                  name={
+                    item.lastMessage?.readBy?.some(r => String(r.user) !== String(user?._id))
+                      ? 'checkmark-done'
+                      : 'checkmark'
+                  }
+                  size={12}
+                  color={
+                    item.lastMessage?.readBy?.some(r => String(r.user) !== String(user?._id))
+                      ? '#5288c1'
+                      : '#708499'
+                  }
+                  style={{ marginRight: 3 }}
+                />
+              )}
+              <Text style={styles.previewText} numberOfLines={1}>
+                {getPreviewText(item)}
+              </Text>
+            </View>
             {unreadCount > 0 && (
               <View style={styles.unreadBadge}>
                 <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
@@ -434,7 +578,11 @@ export default function ChatInboxScreen({ route, navigation }) {
         )}
 
         {loading ? (
-          <LoadingScreen />
+          <View style={{ flex: 1 }}>
+            {[0,1,2,3,4,5].map(i => (
+              <SkeletonRow key={i} opacity={skeletonOpacity} />
+            ))}
+          </View>
         ) : (
           <FlatList
             data={filteredConversations}
@@ -508,8 +656,19 @@ export default function ChatInboxScreen({ route, navigation }) {
                 isInline={true}
               />
             ) : (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#708499', fontSize: 16 }}>Select a conversation to start chatting</Text>
+              <View style={styles.emptyRightPanel}>
+                <View style={styles.emptyLockIcon}>
+                  <Ionicons name="lock-closed" size={48} color="#1e293b" />
+                </View>
+                <Text style={styles.emptyRightTitle}>
+                  ClassBridge
+                </Text>
+                <Text style={styles.emptyRightSubtitle}>
+                  Select a conversation to start messaging
+                </Text>
+                <Text style={styles.emptyRightNote}>
+                  Messages are end-to-end monitored by your admin
+                </Text>
               </View>
             )}
           </View>
@@ -566,6 +725,35 @@ export default function ChatInboxScreen({ route, navigation }) {
               <Text style={styles.actionMenuBtnText}>
                 {selectedConvo?.isMuted ? 'Unmute Chat' : 'Mute Chat'}
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionMenuBtn}
+              onPress={() => {
+                setActionMenuVisible(false);
+                Alert.alert(
+                  'Delete Chat',
+                  'Remove this conversation from your inbox? This only affects you.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await api.delete(`/chat/conversations/${selectedConvo?._id}/hide`);
+                          setConversations(prev => prev.filter(c => c._id !== selectedConvo?._id));
+                        } catch (err) {
+                          Alert.alert('Error', 'Could not delete conversation.');
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#ef4444" />
+              <Text style={[styles.actionMenuBtnText, { color: '#ef4444' }]}>Delete Chat</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -763,5 +951,34 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyRightPanel: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#17212b',
+    gap: 8,
+  },
+  emptyLockIcon: {
+    marginBottom: 16,
+  },
+  emptyRightTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#5288c1',
+  },
+  emptyRightSubtitle: {
+    fontSize: 14,
+    color: '#708499',
+  },
+  emptyRightNote: {
+    fontSize: 12,
+    color: '#3d5166',
+    marginTop: 8,
+  },
+  draftLabel: {
+    color: '#e53935',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
