@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import storage from './storage';
 
-const SOCKET_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api')
+const SOCKET_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://classbridge-backend.onrender.com/api')
   .replace('/api', ''); // Extract base domain/port from EXPO_PUBLIC_API_URL
 
 let socket = null;
