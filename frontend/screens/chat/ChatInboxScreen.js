@@ -385,7 +385,7 @@ export default function ChatInboxScreen({ route, navigation }) {
                   <TouchableOpacity
                     onPress={() => {
                       if (Platform.OS === 'web') {
-                        setLeftPanel('settings');
+                        navigatePanel('settings');
                       } else {
                         navigation.navigate('Settings');
                       }
