@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, Platform, Alert } from 'react-native';
 
+
 if (Platform.OS === 'web') {
   Alert.alert = (title, message, buttons) => {
     const text = `${title}${message ? '\n\n' + message : ''}`;
@@ -33,47 +34,10 @@ if (Platform.OS === 'web') {
       }
     }
   };
-
-  try {
-    const iconFontStyles = `
-      @font-face {
-        font-family: 'Ionicons';
-        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf')});
-      }
-      @font-face {
-        font-family: 'MaterialIcons';
-        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf')});
-      }
-      @font-face {
-        font-family: 'MaterialCommunityIcons';
-        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf')});
-      }
-      @font-face {
-        font-family: 'FontAwesome';
-        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf')});
-      }
-      @font-face {
-        font-family: 'Feather';
-        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf')});
-      }
-      @font-face {
-        font-family: 'Entypo';
-        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf')});
-      }
-      @font-face {
-        font-family: 'AntDesign';
-        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf')});
-      }
-    `;
-    const styleElement = document.createElement('style');
-    styleElement.type = 'text/css';
-    styleElement.appendChild(document.createTextNode(iconFontStyles));
-    document.head.appendChild(styleElement);
-  } catch (_e) {
-    // silent fail
-  }
 }
 
+import * as Font from 'expo-font';
+import { Ionicons, MaterialIcons, MaterialCommunityIcons, FontAwesome, Feather, Entypo, AntDesign } from '@expo/vector-icons';
 import { AuthProvider } from './context/AuthContext';
 import { PanelProvider } from './context/PanelContext';
 import AppNavigator from './navigation/AppNavigator';
@@ -110,6 +74,29 @@ function OfflineBanner() {
 import { Provider as PaperProvider, MD3DarkTheme } from 'react-native-paper';
 
 export default function App() {
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    async function loadFonts() {
+      try {
+        await Font.loadAsync({
+          ...Ionicons.font,
+          ...MaterialIcons.font,
+          ...MaterialCommunityIcons.font,
+          ...FontAwesome.font,
+          ...Feather.font,
+          ...Entypo.font,
+          ...AntDesign.font,
+        });
+      } catch (_e) {
+        // silent fail
+      } finally {
+        setFontsLoaded(true);
+      }
+    }
+    loadFonts();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
