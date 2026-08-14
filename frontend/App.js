@@ -33,6 +33,45 @@ if (Platform.OS === 'web') {
       }
     }
   };
+
+  try {
+    const iconFontStyles = `
+      @font-face {
+        font-family: 'Ionicons';
+        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf')});
+      }
+      @font-face {
+        font-family: 'MaterialIcons';
+        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf')});
+      }
+      @font-face {
+        font-family: 'MaterialCommunityIcons';
+        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf')});
+      }
+      @font-face {
+        font-family: 'FontAwesome';
+        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf')});
+      }
+      @font-face {
+        font-family: 'Feather';
+        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf')});
+      }
+      @font-face {
+        font-family: 'Entypo';
+        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf')});
+      }
+      @font-face {
+        font-family: 'AntDesign';
+        src: url(${require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf')});
+      }
+    `;
+    const styleElement = document.createElement('style');
+    styleElement.type = 'text/css';
+    styleElement.appendChild(document.createTextNode(iconFontStyles));
+    document.head.appendChild(styleElement);
+  } catch (_e) {
+    // silent fail
+  }
 }
 
 import { AuthProvider } from './context/AuthContext';
