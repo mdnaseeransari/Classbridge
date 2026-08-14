@@ -194,7 +194,7 @@ export default function UserDetailScreen(props) {
     );
   }
 
-  const showUnlockBtn = user.isLocked || (user.failedLoginAttempts && user.failedLoginAttempts >= 5);
+  const showUnlockBtn = Boolean(user.isLocked || (user.failedLoginAttempts && user.failedLoginAttempts >= 5));
 
   return (
     <View style={styles.root}>
