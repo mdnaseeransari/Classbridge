@@ -99,7 +99,7 @@ export const AuthProvider = ({ children }) => {
       registerPushToken();
       return { success: true, user: normalizeUser(userData), requiresPinChange: !!pinChange };
     } catch (err) {
-      const errorMessage = err?.response?.data?.error || 'Login failed. Please check your network connection.';
+      const errorMessage = err?.response?.data?.error || (err?.code === 'ECONNABORTED' ? 'Server is waking up. Please try again in a few seconds.' : 'Login failed. Server is starting up or network unavailable.');
       return { success: false, error: errorMessage };
     }
   };
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }) => {
       registerPushToken();
       return { success: true, user: normalizeUser(userData) };
     } catch (err) {
-      const errorMessage = err?.response?.data?.error || 'Admin login failed. Please try again.';
+      const errorMessage = err?.response?.data?.error || (err?.code === 'ECONNABORTED' ? 'Server is waking up. Please try again in a few seconds.' : 'Admin login failed. Server is starting up or network unavailable.');
       return { success: false, error: errorMessage };
     }
   };
@@ -127,7 +127,7 @@ export const AuthProvider = ({ children }) => {
       const res = await api.post('/auth/signup', signupData);
       return { success: true, message: res.data.message, user: res.data.user };
     } catch (err) {
-      const errorMessage = err?.response?.data?.error || 'Signup failed. Please try again.';
+      const errorMessage = err?.response?.data?.error || (err?.code === 'ECONNABORTED' ? 'Server is waking up. Please try again in a few seconds.' : 'Signup failed. Server is starting up or network unavailable.');
       return { success: false, error: errorMessage };
     }
   };
