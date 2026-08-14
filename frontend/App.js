@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, Platform, Alert, ActivityIndicator } from 'react-native';
 
 
 if (Platform.OS === 'web') {
