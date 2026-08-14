@@ -121,7 +121,6 @@ export default function App() {
   useEffect(() => {
     async function loadFonts() {
       try {
-        if (Platform.OS === 'web') {
           await Font.loadAsync({
             Ionicons: 'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf',
             MaterialIcons: 'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf',
@@ -131,17 +130,6 @@ export default function App() {
             Entypo: 'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf',
             AntDesign: 'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf',
           });
-        } else {
-          await Font.loadAsync({
-            ...Ionicons.font,
-            ...MaterialIcons.font,
-            ...MaterialCommunityIcons.font,
-            ...FontAwesome.font,
-            ...Feather.font,
-            ...Entypo.font,
-            ...AntDesign.font,
-          });
-        }
       } catch (_e) {
         // silent fail
       } finally {
