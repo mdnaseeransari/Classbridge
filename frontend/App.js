@@ -34,6 +34,48 @@ if (Platform.OS === 'web') {
       }
     }
   };
+
+  try {
+    if (typeof document !== 'undefined' && !document.getElementById('expo-vector-icons-web')) {
+      const fontStyles = `
+        @font-face {
+          font-family: 'Ionicons';
+          src: url('https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype');
+        }
+        @font-face {
+          font-family: 'MaterialIcons';
+          src: url('https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf') format('truetype');
+        }
+        @font-face {
+          font-family: 'MaterialCommunityIcons';
+          src: url('https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+        }
+        @font-face {
+          font-family: 'FontAwesome';
+          src: url('https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf') format('truetype');
+        }
+        @font-face {
+          font-family: 'Feather';
+          src: url('https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Feather.ttf') format('truetype');
+        }
+        @font-face {
+          font-family: 'Entypo';
+          src: url('https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf') format('truetype');
+        }
+        @font-face {
+          font-family: 'AntDesign';
+          src: url('https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf') format('truetype');
+        }
+      `;
+      const styleElement = document.createElement('style');
+      styleElement.id = 'expo-vector-icons-web';
+      styleElement.type = 'text/css';
+      styleElement.appendChild(document.createTextNode(fontStyles));
+      document.head.appendChild(styleElement);
+    }
+  } catch (_e) {
+    // silent fail
+  }
 }
 
 import * as Font from 'expo-font';
