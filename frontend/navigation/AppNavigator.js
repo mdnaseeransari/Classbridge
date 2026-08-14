@@ -1,10 +1,11 @@
 import React, { useContext } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { AuthContext } from '../context/AuthContext';
+import { usePanel } from '../context/PanelContext';
 
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -12,6 +13,8 @@ import AdminLoginScreen from '../screens/auth/AdminLoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
 import PendingApprovalScreen from '../screens/auth/PendingApprovalScreen';
 import ForgotRequestScreen from '../screens/auth/ForgotRequestScreen';
+import ChangePinScreen from '../screens/auth/ChangePinScreen';
+import ForgotPinScreen from '../screens/auth/ForgotPinScreen';
 
 // Main User Screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -27,6 +30,7 @@ import PromoteToAdminScreen from '../screens/admin/PromoteToAdminScreen';
 import AdminReportsScreen from '../screens/admin/AdminReportsScreen';
 import AdminReportDetailScreen from '../screens/admin/AdminReportDetailScreen';
 import AdminResetRequestsScreen from '../screens/admin/AdminResetRequestsScreen';
+import ResetRequestsScreen from '../screens/admin/ResetRequestsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -44,6 +48,7 @@ function AuthStack() {
       <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="ForgotRequest" component={ForgotRequestScreen} />
+      <Stack.Screen name="ForgotPin" component={ForgotPinScreen} />
     </Stack.Navigator>
   );
 }
@@ -75,8 +80,11 @@ function UserStackNavigator() {
 }
 
 function UserTabNavigator() {
+  const { navigatePanel } = usePanel();
+
   return (
     <Tab.Navigator
+      initialRouteName={Platform.OS === 'web' ? 'Chat' : 'Home'}
       screenOptions={{
         headerShown: false,
         tabBarStyle: { backgroundColor: '#111827', borderTopColor: '#1e293b', height: 60, paddingBottom: 8, paddingTop: 6 },
@@ -104,6 +112,15 @@ function UserTabNavigator() {
         options={{
           tabBarIcon: ({ color }) => <Ionicons name="settings" size={20} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            if (Platform.OS === 'web') {
+              e.preventDefault();
+              navigatePanel('settings');
+              navigation.navigate('Chat');
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );
@@ -111,8 +128,11 @@ function UserTabNavigator() {
 
 // Admin Navigation (Admin / Super Admin)
 function AdminTabNavigator() {
+  const { navigatePanel } = usePanel();
+
   return (
     <Tab.Navigator
+      initialRouteName={Platform.OS === 'web' ? 'Chat' : 'AdminDashboard'}
       screenOptions={{
         headerShown: false,
         tabBarStyle: { backgroundColor: '#111827', borderTopColor: '#1e293b', height: 60, paddingBottom: 8, paddingTop: 6 },
@@ -127,6 +147,15 @@ function AdminTabNavigator() {
           tabBarLabel: 'Dashboard',
           tabBarIcon: ({ color }) => <Ionicons name="shield-checkmark" size={20} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            if (Platform.OS === 'web') {
+              e.preventDefault();
+              navigatePanel('dashboard');
+              navigation.navigate('Chat');
+            }
+          },
+        })}
       />
       <Tab.Screen
         name="Chat"
@@ -143,6 +172,15 @@ function AdminTabNavigator() {
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color }) => <Ionicons name="settings" size={20} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            if (Platform.OS === 'web') {
+              e.preventDefault();
+              navigatePanel('settings');
+              navigation.navigate('Chat');
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );
@@ -173,12 +211,13 @@ function AdminStackNavigator() {
       <Stack.Screen name="AdminReportDetail" component={AdminReportDetailScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="AdminResetRequests" component={AdminResetRequestsScreen} />
+      <Stack.Screen name="ResetRequests" component={ResetRequestsScreen} />
     </Stack.Navigator>
   );
 }
 
 export default function AppNavigator() {
-  const { token, user, loading } = useContext(AuthContext);
+  const { token, user, requiresPinChange, loading } = useContext(AuthContext);
 
   if (loading) {
     return (
@@ -198,6 +237,15 @@ export default function AppNavigator() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="PendingApproval" component={PendingApprovalScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  // 3. Forced PIN Change -> Lock to Change PIN Screen
+  if (requiresPinChange) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="ChangePin" component={ChangePinScreen} />
       </Stack.Navigator>
     );
   }

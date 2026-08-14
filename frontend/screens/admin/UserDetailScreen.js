@@ -18,9 +18,13 @@ import Avatar from '../../components/ui/Avatar';
 import RoleBadge from '../../components/ui/RoleBadge';
 import StatusBadge from '../../components/ui/StatusBadge';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+import { usePanel } from '../../context/PanelContext';
 
-export default function UserDetailScreen({ route, navigation }) {
-  const { userId } = route.params;
+export default function UserDetailScreen(props) {
+  const { route, navigation } = props;
+  const { goBackPanel, navigatePanel, leftPanelParams } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
+  const userId = isInline ? leftPanelParams?.userId : route?.params?.userId;
   const { user: currentUser } = useContext(AuthContext);
 
   const [user, setUser] = useState(null);
@@ -28,8 +32,18 @@ export default function UserDetailScreen({ route, navigation }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [resetPinModalVisible, setResetPinModalVisible] = useState(false);
+  const [generatedPin, setGeneratedPin] = useState('');
 
   const isSuperAdmin = currentUser?.role === 'superadmin';
+
+  const handleBack = () => {
+    if (isInline) {
+      goBackPanel();
+    } else {
+      navigation.goBack();
+    }
+  };
 
   const fetchUserDetail = async () => {
     try {
@@ -45,6 +59,20 @@ export default function UserDetailScreen({ route, navigation }) {
     setLoading(true);
     fetchUserDetail().finally(() => setLoading(false));
   }, [userId]);
+
+  const handleResetPin = async () => {
+    setActionLoading(true);
+    try {
+      const res = await adminApi.resetUserPin(userId);
+      setGeneratedPin(res.data.newPin);
+      setResetPinModalVisible(true);
+      await fetchUserDetail();
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to reset PIN.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleToggleBan = async () => {
     if (!user) return;
@@ -119,7 +147,7 @@ export default function UserDetailScreen({ route, navigation }) {
       setActionLoading(true);
       try {
         await adminApi.deleteUser(userId, note);
-        navigation.goBack();
+        handleBack();
       } catch (_err) {
         // silent fail
       } finally {
@@ -140,7 +168,7 @@ export default function UserDetailScreen({ route, navigation }) {
             setActionLoading(true);
             try {
               await adminApi.deleteUser(userId, note);
-              navigation.goBack();
+              handleBack();
             } catch (_err) {
               // silent fail
             } finally {
@@ -158,7 +186,7 @@ export default function UserDetailScreen({ route, navigation }) {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>{error || 'User not found.'}</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
           <Text style={styles.backBtnText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -169,13 +197,13 @@ export default function UserDetailScreen({ route, navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.body}>
           {/* Profile Header Banner */}
-          <View style={styles.profileHeader}>
-            <TouchableOpacity style={styles.backIcon} onPress={() => navigation.goBack()}>
+          <View style={[styles.profileHeader, isInline && { paddingTop: 14 }]}>
+            <TouchableOpacity style={styles.backIcon} onPress={handleBack}>
               <Ionicons name="arrow-back" size={24} color="#ffffff" />
             </TouchableOpacity>
 
@@ -256,6 +284,18 @@ export default function UserDetailScreen({ route, navigation }) {
               <Ionicons name="chevron-forward" size={18} color="#708499" />
             </TouchableOpacity>
 
+            {!['admin', 'superadmin'].includes(user.role) && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={handleResetPin}
+                disabled={actionLoading}
+              >
+                <Ionicons name="refresh-circle-outline" size={20} color="#38bdf8" />
+                <Text style={[styles.actionRowText, { color: '#38bdf8' }]}>Reset PIN</Text>
+                <Ionicons name="chevron-forward" size={18} color="#708499" />
+              </TouchableOpacity>
+            )}
+
             {showUnlockBtn && (
               <TouchableOpacity
                 style={styles.actionRow}
@@ -271,7 +311,7 @@ export default function UserDetailScreen({ route, navigation }) {
             {isSuperAdmin && (
               <TouchableOpacity
                 style={styles.actionRow}
-                onPress={() => navigation.navigate('PromoteToAdmin', { user })}
+                onPress={() => isInline ? navigatePanel('promoteToAdmin', { user }) : navigation.navigate('PromoteToAdmin', { user })}
                 disabled={actionLoading}
               >
                 <Ionicons name="arrow-up-circle-outline" size={20} color="#5288c1" />
@@ -292,6 +332,37 @@ export default function UserDetailScreen({ route, navigation }) {
           </View>
         </ScrollView>
       </View>
+
+      {/* Reset PIN Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={resetPinModalVisible}
+        onRequestClose={() => setResetPinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconContainer}>
+              <Ionicons name="key-sharp" size={40} color="#38bdf8" />
+            </View>
+            <Text style={styles.modalTitle}>PIN Reset Successfully</Text>
+            <Text style={styles.modalSubtitle}>
+              Share this temporary PIN with the user. They will be forced to change it on their next login.
+            </Text>
+            
+            <View style={styles.pinContainer}>
+              <Text style={styles.pinText}>{generatedPin}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setResetPinModalVisible(false)}
+            >
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -300,6 +371,75 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#17212b',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#1c2438',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#2b3a4b',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+  },
+  modalIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#708499',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  pinContainer: {
+    backgroundColor: '#0a0e1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2b3a4b',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  pinText: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#38bdf8',
+    letterSpacing: 6,
+  },
+  modalCloseButton: {
+    backgroundColor: '#38bdf8',
+    paddingVertical: 12,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   container: {
     flex: 1,

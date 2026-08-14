@@ -11,8 +11,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as adminApi from '../../services/adminApi';
+import { usePanel } from '../../context/PanelContext';
 
-export default function CreateAdminScreen({ navigation }) {
+export default function CreateAdminScreen(props) {
+  const { navigation } = props;
+  const { goBackPanel } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,7 +42,11 @@ export default function CreateAdminScreen({ navigation }) {
         email: email.trim().toLowerCase(),
         password,
       });
-      navigation.goBack();
+      if (isInline) {
+        goBackPanel();
+      } else {
+        navigation.goBack();
+      }
     } catch (err) {
       setError(err?.response?.data?.error || 'Failed to create admin account.');
     } finally {
@@ -48,10 +56,10 @@ export default function CreateAdminScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+      <View style={[styles.header, isInline && { paddingTop: 14 }]}>
+        <TouchableOpacity onPress={() => isInline ? goBackPanel() : navigation.goBack()} style={{ paddingRight: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Admin</Text>

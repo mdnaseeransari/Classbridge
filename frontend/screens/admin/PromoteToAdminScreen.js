@@ -12,9 +12,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as adminApi from '../../services/adminApi';
 import RoleBadge from '../../components/ui/RoleBadge';
+import { usePanel } from '../../context/PanelContext';
 
-export default function PromoteToAdminScreen({ route, navigation }) {
-  const { user } = route.params;
+export default function PromoteToAdminScreen(props) {
+  const { route, navigation } = props;
+  const { goBackPanel, leftPanelParams } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
+  const user = isInline ? leftPanelParams?.user : route?.params?.user;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [note, setNote] = useState('');
@@ -40,7 +44,11 @@ export default function PromoteToAdminScreen({ route, navigation }) {
         password,
         note: note.trim() || undefined,
       });
-      navigation.navigate('AdminTabs');
+      if (isInline) {
+        goBackPanel();
+      } else {
+        navigation.navigate('AdminTabs');
+      }
     } catch (err) {
       setError(err?.response?.data?.error || 'Failed to promote user to admin.');
     } finally {
@@ -50,10 +58,10 @@ export default function PromoteToAdminScreen({ route, navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+      <View style={[styles.header, isInline && { paddingTop: 14 }]}>
+        <TouchableOpacity onPress={() => isInline ? goBackPanel() : navigation.goBack()} style={{ paddingRight: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Promote to Admin</Text>

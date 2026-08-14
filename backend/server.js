@@ -90,7 +90,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.use((err, req, res, next) => {
+  const isDev = process.env.NODE_ENV !== 'production';
+  console.error('[ERROR]', err.message);
+  return res.status(err.status || 500).json({
+    error: isDev ? err.message : 'An internal server error occurred.',
+    ...(isDev && { stack: err.stack }),
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`ClassBridge backend server running on port ${PORT}`);
+  console.log(`ClassBridge backend running on port ${PORT}`);
 });

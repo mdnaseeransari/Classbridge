@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const PasswordResetRequest = require('../models/PasswordResetRequest');
+const PinResetRequest = require('../models/PinResetRequest');
+const crypto = require('crypto');
+const { sendExpoPushNotifications } = require('../utils/pushNotifications');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '7d';
@@ -49,9 +52,43 @@ async function signup(req, res) {
       });
     }
 
-    // Validate 6-digit PIN before hashing
-    if (!/^\d{6}$/.test(String(pin))) {
-      return res.status(400).json({ error: 'PIN must be exactly 6 digits.' });
+    // Name validation
+    if (name.trim().length < 2 || name.trim().length > 50) {
+      return res.status(400).json({ 
+        error: 'Name must be between 2 and 50 characters.' 
+      });
+    }
+
+    // Phone validation
+    const phoneStr = String(phone || '').trim();
+    if (!/^[0-9]{10,15}$/.test(phoneStr)) {
+      return res.status(400).json({ 
+        error: 'Phone number must be 10 to 15 digits, numbers only.' 
+      });
+    }
+
+    // PIN validation
+    const pinStr = String(pin || '').trim();
+    if (!/^\d{6}$/.test(pinStr)) {
+      return res.status(400).json({ 
+        error: 'PIN must be exactly 6 digits.' 
+      });
+    }
+
+    // Role-specific field validation
+    if (role === 'teacher') {
+      if (!subject || subject.trim().length < 2) {
+        return res.status(400).json({ 
+          error: 'Subject is required for teachers.' 
+        });
+      }
+    }
+    if (role === 'student') {
+      if (!classGrade || classGrade.trim().length < 1) {
+        return res.status(400).json({ 
+          error: 'Class/Grade is required for students.' 
+        });
+      }
     }
 
     // Check if phone is already registered
@@ -107,7 +144,7 @@ async function loginTeacherStudent(req, res) {
 
     // Find user by phone; select sensitive fields explicitly for auth checks
     const user = await User.findOne({ phone }).select(
-      '+pin +isLocked +failedLoginAttempts +status +role'
+      '+pin +isLocked +failedLoginAttempts +status +role +requiresPinChange'
     );
 
     // ── Generic "invalid credentials" for non-existent accounts ───────────────
@@ -160,6 +197,15 @@ async function loginTeacherStudent(req, res) {
     await user.save();
 
     const token = signToken(user);
+
+    if (user.requiresPinChange) {
+      return res.status(200).json({
+        message: 'Login successful.',
+        token,
+        user: safeUserResponse(user),
+        requiresPinChange: true,
+      });
+    }
 
     return res.status(200).json({
       message: 'Login successful.',
@@ -400,11 +446,8 @@ async function createForgotRequest(req, res) {
     if (email) {
       user = await User.findOne({ email: email.trim().toLowerCase() });
       type = 'password';
-    } else if (phone) {
-      user = await User.findOne({ phone: phone.trim() });
-      type = 'pin';
     } else {
-      return res.status(400).json({ error: 'Email or phone number is required.' });
+      return res.status(400).json({ error: 'Email address is required.' });
     }
 
     if (!user) {
@@ -428,6 +471,99 @@ async function createForgotRequest(req, res) {
   }
 }
 
+const changePin = async (req, res) => {
+  try {
+    const { newPin, confirmPin } = req.body;
+    if (!/^\d{6}$/.test(String(newPin))) {
+      return res.status(400).json({ 
+        error: 'PIN must be exactly 6 digits.' 
+      });
+    }
+    if (String(newPin) !== String(confirmPin)) {
+      return res.status(400).json({ 
+        error: 'PINs do not match.' 
+      });
+    }
+    const user = await User.findById(req.user.id);
+    user.pin = String(newPin);
+    user.requiresPinChange = false;
+    await user.save();
+    return res.status(200).json({ 
+      message: 'PIN changed successfully.' 
+    });
+  } catch (err) {
+    console.error('[AUTH] changePin error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
+// In-memory rate limiting for forgotPin (max 3 per phone number per hour)
+const forgotPinRateLimits = {};
+
+const forgotPin = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required.' });
+    }
+
+    const phoneStr = String(phone).trim();
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+
+    if (!forgotPinRateLimits[phoneStr]) {
+      forgotPinRateLimits[phoneStr] = [];
+    }
+    // Filter out timestamps older than 1 hour
+    forgotPinRateLimits[phoneStr] = forgotPinRateLimits[phoneStr].filter((t) => now - t < oneHour);
+
+    if (forgotPinRateLimits[phoneStr].length >= 3) {
+      return res.status(429).json({ error: 'Too many reset requests. Please try again later.' });
+    }
+    forgotPinRateLimits[phoneStr].push(now);
+
+    const user = await User.findOne({ phone: phoneStr });
+    const genericMessage = 'If this number is registered, a reset request has been sent';
+
+    if (!user) {
+      return res.status(200).json({ message: genericMessage });
+    }
+
+    // Create a pending request
+    const token = crypto.randomBytes(32).toString('hex');
+    await PinResetRequest.create({
+      user: user._id,
+      token,
+      status: 'pending',
+    });
+
+    // Notify all admin and superadmin users
+    try {
+      const admins = await User.find({ role: { $in: ['admin', 'superadmin'] } });
+      const adminPushTokens = admins
+        .map((a) => a.expoPushToken)
+        .filter((tok) => !!tok);
+
+      if (adminPushTokens.length > 0) {
+        const notifications = adminPushTokens.map((tok) => ({
+          to: tok,
+          title: 'PIN Reset Request',
+          body: `PIN reset request from ${user.name}. Review in Reset Requests.`,
+          data: { type: 'pin_reset_request' },
+        }));
+        await sendExpoPushNotifications(notifications);
+      }
+    } catch (pushErr) {
+      console.error('[AUTH] forgotPin push notification error:', pushErr.message);
+    }
+
+    return res.status(200).json({ message: genericMessage });
+  } catch (err) {
+    console.error('[AUTH] forgotPin error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
 module.exports = {
   signup,
   loginTeacherStudent,
@@ -436,6 +572,8 @@ module.exports = {
   updatePushToken,
   updateProfile,
   changePassword,
-  createForgotRequest
+  createForgotRequest,
+  changePin,
+  forgotPin,
 };
 

@@ -15,33 +15,31 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
 
-export default function ForgotRequestScreen({ route, navigation }) {
-  const type = 'password';
-  const [inputValue, setInputValue] = useState('');
+export default function ForgotPinScreen({ navigation }) {
+  const [phone, setPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const handleSubmit = async () => {
     setErrorMsg('');
-    const val = inputValue.trim();
+    setSuccessMsg('');
+    const val = phone.trim();
     if (!val) {
-      setErrorMsg(type === 'pin' ? 'Please enter your phone number.' : 'Please enter your email address.');
+      setErrorMsg('Please enter your phone number.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const payload = type === 'pin' ? { phone: val } : { email: val };
-      const res = await api.post('/auth/forgot-request', payload);
-
-      if (Platform.OS === 'web') {
-        alert(res.data.message);
-      } else {
-        Alert.alert('Request Sent', res.data.message);
-      }
-      navigation.goBack();
+      const res = await api.post('/auth/forgot-pin', { phone: val });
+      setSuccessMsg(res.data.message || 'Your request has been sent to the administrator. You will be notified once approved.');
     } catch (err) {
-      setErrorMsg(err?.response?.data?.error || 'Failed to submit request.');
+      if (err?.response?.status === 429) {
+        setErrorMsg(err?.response?.data?.error || 'Too many reset requests. Please try again later.');
+      } else {
+        setErrorMsg(err?.response?.data?.error || 'Failed to submit request. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -60,24 +58,22 @@ export default function ForgotRequestScreen({ route, navigation }) {
           <Ionicons name="arrow-back" size={24} color="#2563eb" />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{type === 'pin' ? 'Reset PIN' : 'Reset Password'}</Text>
+        <Text style={styles.headerTitle}>Reset PIN</Text>
         <View style={{ width: 60 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.contentCard}>
           <Ionicons 
-            name={type === 'pin' ? 'key-outline' : 'mail-outline'} 
+            name="key-outline" 
             size={48} 
             color="#2563eb" 
             style={styles.icon} 
           />
           
-          <Text style={styles.title}>Forgot Your {type === 'pin' ? 'PIN' : 'Password'}?</Text>
+          <Text style={styles.title}>Forgot Your PIN?</Text>
           <Text style={styles.subtitle}>
-            {type === 'pin' 
-              ? 'Enter the phone number associated with your account. A reset request will be sent to the administrator.'
-              : 'Enter the email address associated with your administrator account. A reset request will be sent to the Super Admin.'}
+            Enter the phone number associated with your account. A reset request will be sent to the administrator.
           </Text>
 
           {errorMsg ? (
@@ -86,32 +82,37 @@ export default function ForgotRequestScreen({ route, navigation }) {
             </View>
           ) : null}
 
-          <Text style={styles.label}>
-            {type === 'pin' ? 'Phone Number' : 'Email Address'}
-          </Text>
-          
-          <TextInput
-            style={styles.input}
-            placeholder={type === 'pin' ? 'e.g. +1234567890' : 'e.g. admin@classbridge.com'}
-            placeholderTextColor="#64748b"
-            keyboardType={type === 'pin' ? 'phone-pad' : 'email-address'}
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={inputValue}
-            onChangeText={setInputValue}
-          />
+          {successMsg ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>{successMsg}</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.label}>Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. +1234567890"
+                placeholderTextColor="#64748b"
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={phone}
+                onChangeText={setPhone}
+              />
 
-          <TouchableOpacity
-            style={[styles.button, isSubmitting && styles.buttonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.buttonText}>Submit Request</Text>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.buttonText}>Send Reset Request</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -142,6 +143,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1e293b',
     alignItems: 'center',
+    ...(Platform.OS === 'web' && {
+      maxWidth: 480,
+      alignSelf: 'center',
+      width: '100%',
+    }),
   },
   icon: { marginBottom: 16 },
   title: { fontSize: 20, fontWeight: '800', color: '#f1f5f9', marginBottom: 10, textAlign: 'center' },
@@ -177,4 +183,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   errorText: { color: '#ef4444', fontSize: 13, textAlign: 'center', fontWeight: '600' },
+  successBox: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: '#10b981',
+    borderRadius: 8,
+    padding: 16,
+    width: '100%',
+  },
+  successText: { color: '#10b981', fontSize: 14, textAlign: 'center', fontWeight: '600', lineHeight: 22 },
 });

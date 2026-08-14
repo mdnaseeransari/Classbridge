@@ -15,9 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
 import StatusBadge from '../../components/ui/StatusBadge';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+import { usePanel } from '../../context/PanelContext';
 
-export default function AdminReportDetailScreen({ route, navigation }) {
-  const { reportId } = route.params;
+export default function AdminReportDetailScreen(props) {
+  const { route, navigation } = props;
+  const { goBackPanel, navigatePanel, leftPanelParams } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
+  const reportId = isInline ? leftPanelParams?.reportId : route?.params?.reportId;
   const [report, setReport] = useState(null);
   const [contextMessages, setContextMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +51,11 @@ export default function AdminReportDetailScreen({ route, navigation }) {
         action,
         adminNotes: adminNotes.trim() || undefined,
       });
-      navigation.goBack();
+      if (isInline) {
+        onBack();
+      } else {
+        navigation.goBack();
+      }
     } catch (_err) {
       console.error('[ADMIN] executeAction error:', _err);
       const errMsg = _err.response?.data?.error || _err.message || 'Unknown error occurred';
@@ -65,7 +73,11 @@ export default function AdminReportDetailScreen({ route, navigation }) {
     setSubmitting(true);
     try {
       await api.delete(`/admin/reports/${reportId}`);
-      navigation.goBack();
+      if (isInline) {
+        onBack();
+      } else {
+        navigation.goBack();
+      }
     } catch (_err) {
       console.error('[ADMIN] deleteReport error:', _err);
       const errMsg = _err.response?.data?.error || _err.message || 'Unknown error occurred';
@@ -89,10 +101,10 @@ export default function AdminReportDetailScreen({ route, navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+      <View style={[styles.header, isInline && { paddingTop: 14 }]}>
+        <TouchableOpacity onPress={() => isInline ? goBackPanel() : navigation.goBack()} style={{ paddingRight: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Report Details</Text>
@@ -134,7 +146,7 @@ export default function AdminReportDetailScreen({ route, navigation }) {
 
             <TouchableOpacity
               style={styles.infoRow}
-              onPress={() => report.reportedUser?._id && navigation.navigate('UserDetail', { userId: report.reportedUser._id })}
+              onPress={() => report.reportedUser?._id && (isInline ? navigatePanel('userDetail', { userId: report.reportedUser._id }) : navigation.navigate('UserDetail', { userId: report.reportedUser._id }))}
             >
               <Text style={styles.infoLabel}>Reported User</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

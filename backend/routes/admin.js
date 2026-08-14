@@ -20,7 +20,23 @@ const {
   deleteReport,
   listResetRequests,
   resolveResetRequest,
+  resetUserPin,
+  listPinResetRequests,
+  approvePinResetRequest,
+  rejectPinResetRequest,
 } = require('../controllers/adminController');
+const validateObjectId = require('../middleware/validateObjectId');
+const rateLimit = require('express-rate-limit');
+
+const resetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // max 3 reset attempts per hour per IP
+  message: { 
+    error: 'Too many reset attempts. Try again in 1 hour.' 
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const router = express.Router();
 
@@ -42,7 +58,7 @@ router.get('/users', listUsers);
  * @desc    Get a single user's full profile (phone visible).
  * @access  admin | superadmin
  */
-router.get('/users/:id', getUser);
+router.get('/users/:id', validateObjectId('id'), getUser);
 
 /**
  * @route   PATCH /api/admin/users/:id/approve
@@ -50,7 +66,7 @@ router.get('/users/:id', getUser);
  * @body    { note? }
  * @access  admin | superadmin
  */
-router.patch('/users/:id/approve', approveUser);
+router.patch('/users/:id/approve', validateObjectId('id'), approveUser);
 
 /**
  * @route   PATCH /api/admin/users/:id/reject
@@ -58,7 +74,7 @@ router.patch('/users/:id/approve', approveUser);
  * @body    { note? }
  * @access  admin | superadmin
  */
-router.patch('/users/:id/reject', rejectUser);
+router.patch('/users/:id/reject', validateObjectId('id'), rejectUser);
 
 /**
  * @route   PATCH /api/admin/users/:id/ban
@@ -66,7 +82,7 @@ router.patch('/users/:id/reject', rejectUser);
  * @body    { note? }
  * @access  admin | superadmin
  */
-router.patch('/users/:id/ban', banUser);
+router.patch('/users/:id/ban', validateObjectId('id'), banUser);
 
 /**
  * @route   PATCH /api/admin/users/:id/unban
@@ -74,7 +90,7 @@ router.patch('/users/:id/ban', banUser);
  * @body    { note? }
  * @access  admin | superadmin
  */
-router.patch('/users/:id/unban', unbanUser);
+router.patch('/users/:id/unban', validateObjectId('id'), unbanUser);
 
 /**
  * @route   PATCH /api/admin/users/:id/unlock
@@ -82,7 +98,14 @@ router.patch('/users/:id/unban', unbanUser);
  * @body    { note? }
  * @access  admin | superadmin
  */
-router.patch('/users/:id/unlock', unlockUser);
+router.patch('/users/:id/unlock', validateObjectId('id'), unlockUser);
+
+/**
+ * @route   PATCH /api/admin/users/:id/reset-pin
+ * @desc    Reset a user's PIN to a temporary random 6-digit PIN.
+ * @access  admin | superadmin
+ */
+router.patch('/users/:id/reset-pin', resetLimiter, validateObjectId('id'), resetUserPin);
 
 /**
  * @route   DELETE /api/admin/users/:id
@@ -91,7 +114,7 @@ router.patch('/users/:id/unlock', unlockUser);
  * @body    { note? }
  * @access  admin | superadmin
  */
-router.delete('/users/:id', deleteUser);
+router.delete('/users/:id', validateObjectId('id'), deleteUser);
 
 // ─── Super Admin–only actions ─────────────────────────────────────────────────
 // requireRole('superadmin') is a SECOND guard — even if a regular admin somehow
@@ -114,7 +137,7 @@ router.post('/users', requireRole('superadmin'), createAdmin);
  * @body    { email, password, note? }
  * @access  superadmin ONLY
  */
-router.patch('/users/:id/promote', requireRole('superadmin'), promoteToAdmin);
+router.patch('/users/:id/promote', requireRole('superadmin'), validateObjectId('id'), promoteToAdmin);
 
 // ─── Audit Logs ───────────────────────────────────────────────────────────────
 
@@ -142,7 +165,7 @@ router.get('/chat/conversations', listAllConversations);
  *          Does not update read receipts.
  * @access  admin | superadmin
  */
-router.get('/chat/conversations/:id/messages', getMonitoredMessages);
+router.get('/chat/conversations/:id/messages', validateObjectId('id'), getMonitoredMessages);
 
 // ─── Message Report Review Queue & Actions ─────────────────────────────────────
 
@@ -158,7 +181,7 @@ router.get('/reports', listReports);
  * @desc    Get single report detail with chat context (5 messages before, 5 messages after).
  * @access  admin | superadmin
  */
-router.get('/reports/:id', getReportDetail);
+router.get('/reports/:id', validateObjectId('id'), getReportDetail);
 
 /**
  * @route   PATCH /api/admin/reports/:id/action
@@ -166,8 +189,8 @@ router.get('/reports/:id', getReportDetail);
  * @body    { action: 'dismiss' | 'delete_message' | 'ban_user' | 'resolve', adminNotes? }
  * @access  admin | superadmin
  */
-router.patch('/reports/:id/action', actionReport);
-router.delete('/reports/:id', deleteReport);
+router.patch('/reports/:id/action', validateObjectId('id'), actionReport);
+router.delete('/reports/:id', validateObjectId('id'), deleteReport);
 
 // ─── Password Reset Request Queue & Actions ─────────────────────────────────────
 
@@ -184,6 +207,29 @@ router.get('/reset-requests', listResetRequests);
  * @body    { action: 'approve' | 'reject', customCredential? }
  * @access  admin | superadmin
  */
-router.post('/reset-requests/:id/resolve', resolveResetRequest);
+router.post('/reset-requests/:id/resolve', validateObjectId('id'), resolveResetRequest);
+
+// ─── PIN Reset Request Queue & Actions ──────────────────────────────────────────
+
+/**
+ * @route   GET /api/admin/pin-reset-requests
+ * @desc    List pending PIN reset requests.
+ * @access  admin | superadmin
+ */
+router.get('/pin-reset-requests', listPinResetRequests);
+
+/**
+ * @route   PATCH /api/admin/pin-reset-requests/:id/approve
+ * @desc    Approve a PIN reset request.
+ * @access  admin | superadmin
+ */
+router.patch('/pin-reset-requests/:id/approve', resetLimiter, validateObjectId('id'), approvePinResetRequest);
+
+/**
+ * @route   PATCH /api/admin/pin-reset-requests/:id/reject
+ * @desc    Reject a PIN reset request.
+ * @access  admin | superadmin
+ */
+router.patch('/pin-reset-requests/:id/reject', validateObjectId('id'), rejectPinResetRequest);
 
 module.exports = router;

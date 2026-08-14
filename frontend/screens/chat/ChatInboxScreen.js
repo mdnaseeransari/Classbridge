@@ -18,12 +18,24 @@ import api from '../../services/api';
 import { connectSocket, getSocket } from '../../services/socket';
 import ChatRoomScreen from './ChatRoomScreen';
 import { Ionicons } from '@expo/vector-icons';
+import OfflineBanner from '../../components/ui/OfflineBanner';
+import SettingsScreen from '../main/SettingsScreen';
+import AdminDashboardScreen from '../admin/AdminDashboardScreen';
+import { usePanel } from '../../context/PanelContext';
+import UserListScreen from '../admin/UserListScreen';
+import UserDetailScreen from '../admin/UserDetailScreen';
+import PendingApprovalsScreen from '../admin/PendingApprovalsScreen';
+import ResetRequestsScreen from '../admin/ResetRequestsScreen';
+import AdminReportsScreen from '../admin/AdminReportsScreen';
+import AdminReportDetailScreen from '../admin/AdminReportDetailScreen';
+import CreateAdminScreen from '../admin/CreateAdminScreen';
+import PromoteToAdminScreen from '../admin/PromoteToAdminScreen';
 
 import Avatar from '../../components/ui/Avatar';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 
-export default function ChatInboxScreen({ navigation }) {
+export default function ChatInboxScreen({ route, navigation }) {
   const { user } = useContext(AuthContext);
   const rootNav = () => 
     navigation.getParent()?.getParent() ?? 
@@ -31,6 +43,8 @@ export default function ChatInboxScreen({ navigation }) {
     navigation;
   const { width } = useWindowDimensions();
   const isLargeScreen = width >= 768;
+
+  const { leftPanel, leftPanelParams, navigatePanel, goBackPanel, resetPanel } = usePanel();
 
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -368,7 +382,16 @@ export default function ChatInboxScreen({ navigation }) {
                 </TouchableOpacity>
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={{ padding: 4 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        setLeftPanel('settings');
+                      } else {
+                        navigation.navigate('Settings');
+                      }
+                    }}
+                    style={{ padding: 4 }}
+                  >
                     <Ionicons name="menu" size={24} color="#ffffff" />
                   </TouchableOpacity>
                   <Text style={styles.headerTitle}>ClassBridge</Text>
@@ -431,13 +454,50 @@ export default function ChatInboxScreen({ navigation }) {
     );
   };
 
+  const renderLeftPanelContent = () => {
+    if (Platform.OS === 'web') {
+      if (leftPanel === 'settings') {
+        return <SettingsScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'dashboard') {
+        return <AdminDashboardScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'userList') {
+        return <UserListScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'userDetail') {
+        return <UserDetailScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'pendingApprovals') {
+        return <PendingApprovalsScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'resetRequests') {
+        return <ResetRequestsScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'reports') {
+        return <AdminReportsScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'reportDetail') {
+        return <AdminReportDetailScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'createAdmin') {
+        return <CreateAdminScreen navigation={navigation} isInline={true} />;
+      }
+      if (leftPanel === 'promoteToAdmin') {
+        return <PromoteToAdminScreen navigation={navigation} isInline={true} />;
+      }
+    }
+    return renderInboxContent();
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      <OfflineBanner />
       {isLargeScreen ? (
         <View style={{ flex: 1, flexDirection: 'row' }}>
           <View style={{ width: 350, borderRightWidth: 1, borderRightColor: '#0e1621' }}>
-            {renderInboxContent()}
+            {renderLeftPanelContent()}
           </View>
           <View style={{ flex: 1, backgroundColor: '#17212b' }}>
             {selectedConvoId ? (
@@ -455,7 +515,7 @@ export default function ChatInboxScreen({ navigation }) {
           </View>
         </View>
       ) : (
-        renderInboxContent()
+        renderLeftPanelContent()
       )}
 
       {/* Action Menu Sheet */}

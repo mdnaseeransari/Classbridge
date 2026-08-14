@@ -16,8 +16,12 @@ import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 import Avatar from '../../components/ui/Avatar';
 import RoleBadge from '../../components/ui/RoleBadge';
+import { usePanel } from '../../context/PanelContext';
 
-export default function SettingsScreen({ navigation }) {
+export default function SettingsScreen(props) {
+  const { navigation } = props;
+  const { goBackPanel } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
   const { user, logout, setUser } = useContext(AuthContext);
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -85,11 +89,15 @@ export default function SettingsScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
       {/* Header */}
-      <View style={styles.header}>
-        {navigation.canGoBack() ? (
+      <View style={[styles.header, isInline && { paddingTop: 14 }]}>
+        {isInline ? (
+          <TouchableOpacity onPress={goBackPanel} style={{ paddingRight: 8 }}>
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        ) : navigation.canGoBack() ? (
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
             <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>

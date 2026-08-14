@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { uploadAttachment } = require('../middleware/upload');
+const validateObjectId = require('../middleware/validateObjectId');
 const {
   getOrCreateDirect,
   listConversations,
@@ -76,56 +77,56 @@ router.get('/contacts', listContacts);
  * @desc    Get a single conversation. Returns 403 if caller is not a participant.
  * @access  Any approved user (participant only)
  */
-router.get('/conversations/:id', getConversation);
+router.get('/conversations/:id', validateObjectId('id'), getConversation);
 
 /**
  * @route   POST /api/chat/conversations/:id/pin
  * @desc    Pin a conversation to the top.
  * @access  Any participant
  */
-router.post('/conversations/:id/pin', pinConversation);
+router.post('/conversations/:id/pin', validateObjectId('id'), pinConversation);
 
 /**
  * @route   POST /api/chat/conversations/:id/unpin
  * @desc    Unpin a conversation.
  * @access  Any participant
  */
-router.post('/conversations/:id/unpin', unpinConversation);
+router.post('/conversations/:id/unpin', validateObjectId('id'), unpinConversation);
 
 /**
  * @route   POST /api/chat/conversations/:id/archive
  * @desc    Archive a conversation.
  * @access  Any participant
  */
-router.post('/conversations/:id/archive', archiveConversation);
+router.post('/conversations/:id/archive', validateObjectId('id'), archiveConversation);
 
 /**
  * @route   POST /api/chat/conversations/:id/unarchive
  * @desc    Unarchive a conversation.
  * @access  Any participant
  */
-router.post('/conversations/:id/unarchive', unarchiveConversation);
+router.post('/conversations/:id/unarchive', validateObjectId('id'), unarchiveConversation);
 
 /**
  * @route   POST /api/chat/conversations/:id/mute
  * @desc    Mute a conversation.
  * @access  Any participant
  */
-router.post('/conversations/:id/mute', muteConversation);
+router.post('/conversations/:id/mute', validateObjectId('id'), muteConversation);
 
 /**
  * @route   POST /api/chat/conversations/:id/unmute
  * @desc    Unmute a conversation.
  * @access  Any participant
  */
-router.post('/conversations/:id/unmute', unmuteConversation);
+router.post('/conversations/:id/unmute', validateObjectId('id'), unmuteConversation);
 
 /**
  * @route   GET /api/chat/conversations/:id/search
  * @desc    Search messages in a conversation.
  * @access  Any participant
  */
-router.get('/conversations/:id/search', searchMessages);
+router.get('/conversations/:id/search', validateObjectId('id'), searchMessages);
 
 // ─── Group Management (Admin / Super Admin ONLY) ──────────────────────────────
 
@@ -141,35 +142,35 @@ router.post('/groups', createGroup);
  * @desc    Rename a group chat.
  * @access  Admin / Super Admin only
  */
-router.patch('/groups/:id', updateGroup);
+router.patch('/groups/:id', validateObjectId('id'), updateGroup);
 
 /**
  * @route   DELETE /api/chat/groups/:id
  * @desc    Delete a group chat.
  * @access  Admin / Super Admin only
  */
-router.delete('/groups/:id', deleteGroup);
+router.delete('/groups/:id', validateObjectId('id'), deleteGroup);
 
 /**
  * @route   POST /api/chat/groups/:id/members
  * @desc    Add members to a group chat.
  * @access  Admin / Super Admin only
  */
-router.post('/groups/:id/members', addGroupMembers);
+router.post('/groups/:id/members', validateObjectId('id'), addGroupMembers);
 
 /**
  * @route   DELETE /api/chat/groups/:id/members/:userId
  * @desc    Remove a member from a group chat.
  * @access  Admin / Super Admin only
  */
-router.delete('/groups/:id/members/:userId', removeGroupMember);
+router.delete('/groups/:id/members/:userId', validateObjectId('id', 'userId'), removeGroupMember);
 
 /**
  * @route   GET /api/chat/groups/:id/members
  * @desc    Get member list for a group. Omits phone numbers for non-admin callers.
  * @access  Group participant or Admin / Super Admin
  */
-router.get('/groups/:id/members', getGroupMembers);
+router.get('/groups/:id/members', validateObjectId('id'), getGroupMembers);
 
 // ─── Group Invite Links ───────────────────────────────────────────────────────
 
@@ -178,7 +179,7 @@ router.get('/groups/:id/members', getGroupMembers);
  * @desc    Generate a shareable invite link with optional expiry/max-uses.
  * @access  Admin / Super Admin only
  */
-router.post('/groups/:id/invites', createInviteLink);
+router.post('/groups/:id/invites', validateObjectId('id'), createInviteLink);
 
 /**
  * @route   POST /api/chat/groups/join/:code
@@ -197,7 +198,7 @@ router.post('/groups/join/:code', joinViaInvite);
  * @query   page
  * @access  Any approved user (participant only)
  */
-router.get('/conversations/:id/messages', getMessages);
+router.get('/conversations/:id/messages', validateObjectId('id'), getMessages);
 
 /**
  * @route   POST /api/chat/conversations/:id/attachment
@@ -205,7 +206,7 @@ router.get('/conversations/:id/messages', getMessages);
  *          Streams file to Cloudinary and saves URL in MongoDB.
  * @access  Any approved conversation participant
  */
-router.post('/conversations/:id/attachment', uploadAttachment, sendFileAttachment);
+router.post('/conversations/:id/attachment', validateObjectId('id'), uploadAttachment, sendFileAttachment);
 
 /**
  * @route   POST /api/chat/messages/:id/report
@@ -214,7 +215,7 @@ router.post('/conversations/:id/attachment', uploadAttachment, sendFileAttachmen
  * @body    { reason, details? }
  * @access  Any approved conversation participant
  */
-router.post('/messages/:id/report', reportMessage);
+router.post('/messages/:id/report', validateObjectId('id'), reportMessage);
 
 /**
  * @route   PATCH /api/chat/messages/:id
@@ -222,14 +223,14 @@ router.post('/messages/:id/report', reportMessage);
  * @body    { content }
  * @access  Sender of the message
  */
-router.patch('/messages/:id', editMessage);
+router.patch('/messages/:id', validateObjectId('id'), editMessage);
 
 /**
  * @route   DELETE /api/chat/messages/:id
  * @desc    Soft-delete a message (sender or admin only).
  * @access  Sender or Admin/Super Admin
  */
-router.delete('/messages/:id', deleteMessage);
+router.delete('/messages/:id', validateObjectId('id'), deleteMessage);
 
 /**
  * @route   POST /api/chat/messages/:id/forward
@@ -237,6 +238,6 @@ router.delete('/messages/:id', deleteMessage);
  * @body    { conversationId }
  * @access  Any approved conversation participant
  */
-router.post('/messages/:id/forward', forwardMessage);
+router.post('/messages/:id/forward', validateObjectId('id'), forwardMessage);
 
 module.exports = router;

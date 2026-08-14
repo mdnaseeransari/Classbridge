@@ -26,6 +26,9 @@ export const unlockUser = (id, note) =>
 export const deleteUser = (id, note) =>
   api.delete(`/admin/users/${id}`, { data: { note: note || undefined } });
 
+export const resetUserPin = (id) =>
+  api.patch(`/admin/users/${id}/reset-pin`);
+
 // ─── Super Admin Only ─────────────────────────────────────────────────────────
 
 export const createAdmin = (data) =>
@@ -38,3 +41,14 @@ export const promoteToAdmin = (id, data) =>
 
 export const getAdminLogs = (params = {}) =>
   api.get('/admin/logs', { params });
+
+// ─── PIN Reset Request Queue ──────────────────────────────────────────────────
+
+export const listPinResetRequests = (params = {}) =>
+  api.get('/admin/pin-reset-requests', { params });
+
+export const approvePinResetRequest = (id) =>
+  api.patch(`/admin/pin-reset-requests/${id}/approve`);
+
+export const rejectPinResetRequest = (id) =>
+  api.patch(`/admin/pin-reset-requests/${id}/reject`);

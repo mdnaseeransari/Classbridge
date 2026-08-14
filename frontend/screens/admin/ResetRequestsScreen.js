@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Portal, Dialog, Button } from 'react-native-paper';
 import * as adminApi from '../../services/adminApi';
 import Avatar from '../../components/ui/Avatar';
 import RoleBadge from '../../components/ui/RoleBadge';
@@ -20,19 +21,31 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 import { usePanel } from '../../context/PanelContext';
 
-function PendingRow({ user, onApprove, onReject, loading }) {
-  const extra = user.subject || user.classGrade || user.phone || '—';
+const getTimeAgo = (dateString) => {
+  const diff = Date.now() - new Date(dateString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+};
+
+function RequestRow({ request, onApprove, onReject, loading }) {
+  const reqUser = request.user || {};
+  const timeAgo = getTimeAgo(request.requestedAt);
 
   return (
-    <View style={styles.pendingRow}>
-      <Avatar name={user.name} role={user.role} size="medium" />
+    <View style={styles.requestRow}>
+      <Avatar name={reqUser.name} role={reqUser.role} size="medium" />
 
       <View style={styles.details}>
         <View style={styles.nameLine}>
-          <Text style={styles.nameText} numberOfLines={1}>{user.name}</Text>
-          <RoleBadge role={user.role} style={{ alignSelf: 'center' }} />
+          <Text style={styles.nameText} numberOfLines={1}>{reqUser.name}</Text>
+          <RoleBadge role={reqUser.role} style={{ alignSelf: 'center' }} />
         </View>
-        <Text style={styles.subText} numberOfLines={1}>{extra}</Text>
+        <Text style={styles.subText} numberOfLines={1}>Requested {timeAgo}</Text>
       </View>
 
       <View style={styles.actionButtons}>
@@ -42,14 +55,14 @@ function PendingRow({ user, onApprove, onReject, loading }) {
           <>
             <TouchableOpacity
               style={[styles.smallBtn, { backgroundColor: '#e53935' }]}
-              onPress={() => onReject(user._id)}
+              onPress={() => onReject(request._id)}
               activeOpacity={0.8}
             >
               <Ionicons name="close" size={16} color="#ffffff" />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.smallBtn, { backgroundColor: '#4dbd74' }]}
-              onPress={() => onApprove(user._id)}
+              onPress={() => onApprove(request._id)}
               activeOpacity={0.8}
             >
               <Ionicons name="checkmark" size={16} color="#ffffff" />
@@ -61,89 +74,106 @@ function PendingRow({ user, onApprove, onReject, loading }) {
   );
 }
 
-export default function PendingApprovalsScreen(props) {
+export default function ResetRequestsScreen(props) {
   const { navigation } = props;
   const { goBackPanel } = usePanel();
   const isInline = Platform.OS === 'web' && props.isInline;
-  const [users, setUsers] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
   const [error, setError] = useState('');
 
-  const fetchPending = useCallback(async () => {
+  // Dialog state
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [tempPin, setTempPin] = useState('');
+
+  const fetchRequests = useCallback(async () => {
     try {
       setError('');
-      const res = await adminApi.getUsers({ status: 'pending', limit: 100 });
-      setUsers(res.data.users || []);
+      const res = await adminApi.listPinResetRequests();
+      setRequests(res.data.requests || []);
     } catch (_err) {
-      setError('Failed to load pending users.');
+      setError('Failed to load pending reset requests.');
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      fetchPending().finally(() => setLoading(false));
-    }, [fetchPending])
+      fetchRequests().finally(() => setLoading(false));
+    }, [fetchRequests])
   );
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchPending();
+    await fetchRequests();
     setRefreshing(false);
   };
 
-  const handleApprove = async (userId) => {
-    setActionLoading((prev) => ({ ...prev, [userId]: true }));
+  const handleApprove = async (requestId) => {
+    setActionLoading((prev) => ({ ...prev, [requestId]: true }));
     try {
-      await adminApi.approveUser(userId, '');
-      setUsers((prev) => prev.filter((u) => u._id !== userId));
-    } catch (_err) {
-      // silent fail
+      const res = await adminApi.approvePinResetRequest(requestId);
+      setRequests((prev) => prev.filter((r) => r._id !== requestId));
+      setTempPin(res.data.newPin || '');
+      setDialogVisible(true);
+    } catch (err) {
+      const errMsg = err?.response?.data?.error || 'Failed to approve PIN reset.';
+      if (Platform.OS === 'web') {
+        window.alert(errMsg);
+      } else {
+        Alert.alert('Error', errMsg);
+      }
     } finally {
-      setActionLoading((prev) => ({ ...prev, [userId]: false }));
+      setActionLoading((prev) => ({ ...prev, [requestId]: false }));
     }
   };
 
-  const handleReject = async (userId) => {
-    if (Platform.OS === 'web') {
-      const confirm = window.confirm('Are you sure you want to reject this application?');
-      if (!confirm) return;
-      setActionLoading((prev) => ({ ...prev, [userId]: true }));
+  const handleReject = async (requestId) => {
+    const performReject = async () => {
+      setActionLoading((prev) => ({ ...prev, [requestId]: true }));
       try {
-        await adminApi.rejectUser(userId, '');
-        setUsers((prev) => prev.filter((u) => u._id !== userId));
-      } catch (_err) {
-        // silent fail
+        await adminApi.rejectPinResetRequest(requestId);
+        setRequests((prev) => prev.filter((r) => r._id !== requestId));
+        if (Platform.OS === 'web') {
+          window.alert('Reset request rejected successfully.');
+        } else {
+          Alert.alert('Success', 'Reset request rejected successfully.');
+        }
+      } catch (err) {
+        const errMsg = err?.response?.data?.error || 'Failed to reject PIN reset.';
+        if (Platform.OS === 'web') {
+          window.alert(errMsg);
+        } else {
+          Alert.alert('Error', errMsg);
+        }
       } finally {
-        setActionLoading((prev) => ({ ...prev, [userId]: false }));
+        setActionLoading((prev) => ({ ...prev, [requestId]: false }));
       }
-      return;
-    }
+    };
 
-    Alert.alert(
-      'Reject Application',
-      'Are you sure you want to reject this application?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            setActionLoading((prev) => ({ ...prev, [userId]: true }));
-            try {
-              await adminApi.rejectUser(userId, '');
-              setUsers((prev) => prev.filter((u) => u._id !== userId));
-            } catch (_err) {
-              // silent fail
-            } finally {
-              setActionLoading((prev) => ({ ...prev, [userId]: false }));
-            }
-          },
-        },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm('Are you sure you want to reject this request?');
+      if (confirm) await performReject();
+    } else {
+      Alert.alert(
+        'Reject Request',
+        'Are you sure you want to reject this request?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reject', style: 'destructive', onPress: performReject },
+        ]
+      );
+    }
+  };
+
+  const handleBack = () => {
+    if (isInline) {
+      goBackPanel();
+    } else {
+      navigation.goBack();
+    }
   };
 
   return (
@@ -151,12 +181,12 @@ export default function PendingApprovalsScreen(props) {
       {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
       <View style={[styles.header, isInline && { paddingTop: 14 }]}>
-        <TouchableOpacity onPress={() => isInline ? goBackPanel() : navigation.goBack()} style={{ paddingRight: 8 }}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pending Approvals</Text>
+        <Text style={styles.headerTitle}>Reset Requests</Text>
         <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{users.length}</Text>
+          <Text style={styles.countBadgeText}>{requests.length}</Text>
         </View>
       </View>
 
@@ -171,11 +201,11 @@ export default function PendingApprovalsScreen(props) {
           <LoadingScreen />
         ) : (
           <FlatList
-            data={users}
+            data={requests}
             keyExtractor={(item) => item._id}
             renderItem={({ item }) => (
-              <PendingRow
-                user={item}
+              <RequestRow
+                request={item}
                 loading={!!actionLoading[item._id]}
                 onApprove={handleApprove}
                 onReject={handleReject}
@@ -185,12 +215,29 @@ export default function PendingApprovalsScreen(props) {
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#5288c1" />
             }
             ListEmptyComponent={
-              <EmptyState title="No pending approvals" subtitle="All registration applications have been reviewed." />
+              <EmptyState title="No pending reset requests" subtitle="All PIN reset applications have been reviewed." />
             }
             contentContainerStyle={{ paddingBottom: 40 }}
           />
         )}
       </View>
+
+      <Portal>
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>PIN Reset Approved</Dialog.Title>
+          <Dialog.Content>
+            <Text style={styles.dialogText}>
+              New PIN: <Text style={styles.dialogPin}>{tempPin}</Text>
+            </Text>
+            <Text style={styles.dialogSubText}>
+              Communicate this to the user securely. Valid for 5 minutes.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDialogVisible(false)} textColor="#5288c1">Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -218,6 +265,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#0e1621',
+  },
+  backBtn: {
+    paddingRight: 8,
   },
   headerTitle: {
     fontSize: 20,
@@ -249,7 +299,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13,
   },
-  pendingRow: {
+  requestRow: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -289,5 +339,30 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  dialog: {
+    backgroundColor: '#1b2432',
+    borderRadius: 12,
+  },
+  dialogTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  dialogText: {
+    color: '#ffffff',
+    fontSize: 16,
+    marginVertical: 8,
+  },
+  dialogPin: {
+    color: '#4dbd74',
+    fontSize: 22,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  dialogSubText: {
+    color: '#708499',
+    fontSize: 13,
+    marginTop: 4,
   },
 });

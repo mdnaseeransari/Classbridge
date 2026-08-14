@@ -36,6 +36,7 @@ if (Platform.OS === 'web') {
 }
 
 import { AuthProvider } from './context/AuthContext';
+import { PanelProvider } from './context/PanelContext';
 import AppNavigator from './navigation/AppNavigator';
 
 function OfflineBanner() {
@@ -75,9 +76,11 @@ export default function App() {
       <AuthProvider>
         <PaperProvider theme={MD3DarkTheme}>
           <NavigationContainer>
-            <StatusBar style="light" />
-            <OfflineBanner />
-            <AppNavigator />
+            <PanelProvider>
+              <StatusBar style="light" />
+              <OfflineBanner />
+              <AppNavigator />
+            </PanelProvider>
           </NavigationContainer>
         </PaperProvider>
       </AuthProvider>

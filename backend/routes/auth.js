@@ -8,7 +8,9 @@ const {
   updatePushToken,
   updateProfile,
   changePassword,
-  createForgotRequest
+  createForgotRequest,
+  changePin,
+  forgotPin
 } = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 
@@ -85,12 +87,28 @@ router.patch('/profile', authenticate, updateProfile);
 router.patch('/change-password', authenticate, changePassword);
 
 /**
+ * @route   PATCH /api/auth/change-pin
+ * @desc    Allows forced change of PIN on next login.
+ * @access  Private (requires valid JWT)
+ * @body    { newPin, confirmPin }
+ */
+router.patch('/change-pin', authenticate, changePin);
+
+/**
  * @route   POST /api/auth/forgot-request
  * @desc    Create a forgot password/PIN reset request.
  * @access  Public
  * @body    { email, phone }
  */
 router.post('/forgot-request', createForgotRequest);
+
+/**
+ * @route   POST /api/auth/forgot-pin
+ * @desc    Create a PIN reset request.
+ * @access  Public
+ * @body    { phone }
+ */
+router.post('/forgot-pin', forgotPin);
 
 /**
  * @route   POST /api/auth/push-token

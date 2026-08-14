@@ -3,6 +3,8 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const AdminLog = require('../models/AdminLog');
 const PasswordResetRequest = require('../models/PasswordResetRequest');
+const PinResetRequest = require('../models/PinResetRequest');
+const bcrypt = require('bcrypt');
 const { sendExpoPushNotifications } = require('../utils/pushNotifications');
 
 // ─── Helper: build a snapshot of the target user for the audit log ────────────
@@ -999,6 +1001,207 @@ async function resolveResetRequest(req, res) {
   }
 }
 
+const resetUserPin = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (['admin','superadmin'].includes(user.role)) {
+      return res.status(403).json({ 
+        error: 'Cannot reset PIN for admin accounts.' 
+      });
+    }
+    // Generate random 6-digit PIN
+    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+    user.pin = newPin; // pre-save hook will hash it
+    user.requiresPinChange = true;
+    user.isLocked = false;
+    user.failedLoginAttempts = 0;
+    await user.save();
+    // Log the action
+    await AdminLog.create({
+      action: 'reset_pin',
+      performedBy: req.user.id,
+      targetUser: user._id,
+      targetSnapshot: { name: user.name, role: user.role }
+    });
+    // Send push notification to user
+    if (user.expoPushToken) {
+      await sendExpoPushNotifications([{
+        to: user.expoPushToken,
+        title: 'PIN Reset',
+        body: 'Your PIN has been reset by an admin. Please log in with your new PIN.',
+        data: { type: 'pin_reset' }
+      }]);
+    }
+    return res.status(200).json({ 
+      message: 'PIN reset successfully.',
+      newPin // returned ONCE, never stored in plain text
+    });
+  } catch (err) {
+    console.error('[ADMIN] resetUserPin error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/pin-reset-requests
+// List all pending PIN reset requests.
+// ─────────────────────────────────────────────────────────────────────────────
+async function listPinResetRequests(req, res) {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const total = await PinResetRequest.countDocuments({ status: 'pending' });
+    const requests = await PinResetRequest.find({ status: 'pending' })
+      .populate('user', 'name email phone role status')
+      .sort({ requestedAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    return res.status(200).json({
+      requests,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (err) {
+    console.error('[ADMIN] listPinResetRequests error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/admin/pin-reset-requests/:id/approve
+// Approve a PIN reset request, generate a new temporary PIN, and expire it in 5m.
+// ─────────────────────────────────────────────────────────────────────────────
+async function approvePinResetRequest(req, res) {
+  try {
+    const request = await PinResetRequest.findById(req.params.id).populate('user');
+    if (!request) {
+      return res.status(404).json({ error: 'Reset request not found.' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Request is already resolved.' });
+    }
+
+    const targetUser = request.user;
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Associated user not found.' });
+    }
+
+    // Generate random 6-digit PIN
+    const generatedPin = String(Math.floor(100000 + Math.random() * 900000));
+    
+    // Hash it for PinResetRequest model
+    const hashedNewPin = await bcrypt.hash(generatedPin, 12);
+
+    // Save plain PIN to targetUser (User pre-save hook will hash it)
+    targetUser.pin = generatedPin;
+    targetUser.requiresPinChange = true;
+    await targetUser.save();
+
+    // Update request status
+    request.status = 'approved';
+    request.approvedAt = new Date();
+    request.expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+    request.newPin = hashedNewPin;
+    await request.save();
+
+    // Write to AdminLog
+    await AdminLog.create({
+      action: 'approve_pin_reset',
+      performedBy: req.user.id,
+      targetUser: targetUser._id,
+      targetSnapshot: buildSnapshot(targetUser),
+    });
+
+    // Notify user
+    if (targetUser.expoPushToken) {
+      try {
+        await sendExpoPushNotifications([
+          {
+            to: targetUser.expoPushToken,
+            title: 'PIN Reset Approved',
+            body: 'Your PIN reset has been approved. Log in with your new PIN. This expires in 5 minutes.',
+            data: { type: 'pin_reset_approved' },
+          },
+        ]);
+      } catch (pushErr) {
+        console.error('[ADMIN] approvePinResetRequest push notification error:', pushErr.message);
+      }
+    }
+
+    return res.status(200).json({
+      message: 'PIN reset approved successfully.',
+      newPin: generatedPin, // Plain text PIN to be shown once
+    });
+  } catch (err) {
+    console.error('[ADMIN] approvePinResetRequest error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/admin/pin-reset-requests/:id/reject
+// Reject a PIN reset request.
+// ─────────────────────────────────────────────────────────────────────────────
+async function rejectPinResetRequest(req, res) {
+  try {
+    const request = await PinResetRequest.findById(req.params.id).populate('user');
+    if (!request) {
+      return res.status(404).json({ error: 'Reset request not found.' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Request is already resolved.' });
+    }
+
+    const targetUser = request.user;
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Associated user not found.' });
+    }
+
+    request.status = 'rejected';
+    await request.save();
+
+    // Write to AdminLog
+    await AdminLog.create({
+      action: 'reject_pin_reset',
+      performedBy: req.user.id,
+      targetUser: targetUser._id,
+      targetSnapshot: buildSnapshot(targetUser),
+    });
+
+    // Notify user
+    if (targetUser.expoPushToken) {
+      try {
+        await sendExpoPushNotifications([
+          {
+            to: targetUser.expoPushToken,
+            title: 'PIN Reset Rejected',
+            body: 'Your PIN reset request was not approved. Contact your administrator.',
+            data: { type: 'pin_reset_rejected' },
+          },
+        ]);
+      } catch (pushErr) {
+        console.error('[ADMIN] rejectPinResetRequest push notification error:', pushErr.message);
+      }
+    }
+
+    return res.status(200).json({ message: 'Reset request rejected successfully.' });
+  } catch (err) {
+    console.error('[ADMIN] rejectPinResetRequest error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -1019,5 +1222,9 @@ module.exports = {
   deleteReport,
   listResetRequests,
   resolveResetRequest,
+  resetUserPin,
+  listPinResetRequests,
+  approvePinResetRequest,
+  rejectPinResetRequest,
 };
 

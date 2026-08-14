@@ -49,8 +49,27 @@ function userIsOnline(userId) {
   return onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// initChatSocket(io)
+const messageRateLimit = new Map();
+
+const isRateLimited = (socketId) => {
+  const now = Date.now();
+  const windowMs = 10000; // 10 seconds
+  const maxMessages = 20; // max 20 messages per 10 seconds
+  
+  if (!messageRateLimit.has(socketId)) {
+    messageRateLimit.set(socketId, []);
+  }
+  
+  const timestamps = messageRateLimit.get(socketId)
+    .filter(t => now - t < windowMs);
+  
+  timestamps.push(now);
+  messageRateLimit.set(socketId, timestamps);
+  
+  return timestamps.length > maxMessages;
+};
+
+// ─── initChatSocket(io)
 // Call this once after creating the Socket.io server instance.
 // ─────────────────────────────────────────────────────────────────────────────
 function initChatSocket(io) {
@@ -166,14 +185,25 @@ function initChatSocket(io) {
     // ────────────────────────────────────────────────────────────────────────
     socket.on('send_message', async ({ conversationId, content, replyTo }, ack) => {
       try {
-        if (!conversationId || !content || !String(content).trim()) {
-          return emitError(socket, 'conversationId and content are required.');
+        if (isRateLimited(socket.id)) {
+          return emitError(socket, 'Too many messages. Please slow down.');
         }
 
-        const trimmedContent = String(content).trim();
-        if (trimmedContent.length > 5000) {
-          return emitError(socket, 'Message content cannot exceed 5000 characters.');
+        if (!content || typeof content !== 'string') {
+          return emitError(socket, 'Invalid message content.');
         }
+        if (content.trim().length === 0) {
+          return emitError(socket, 'Message cannot be empty.');
+        }
+        if (content.length > 4000) {
+          return emitError(socket, 'Message too long. Maximum 4000 characters.');
+        }
+
+        if (!conversationId) {
+          return emitError(socket, 'conversationId is required.');
+        }
+
+        const trimmedContent = content.trim();
 
         // Verify participant + fetch conversation
         const conversation = await Conversation.findById(conversationId).select(
@@ -511,6 +541,7 @@ function initChatSocket(io) {
     // Disconnect
     // ────────────────────────────────────────────────────────────────────────
     socket.on('disconnect', () => {
+      messageRateLimit.delete(socket.id);
       const sockets = onlineUsers.get(userId);
       if (sockets) {
         sockets.delete(socket.id);

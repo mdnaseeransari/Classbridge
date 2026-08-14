@@ -24,6 +24,8 @@ const adminLogSchema = new mongoose.Schema(
         'password_reset_approved', // password/PIN reset request resolved
         'message_deleted_via_report', // message deleted due to a report
         'report_resolved',            // report marked resolved
+        'approve_pin_reset',
+        'reject_pin_reset',
       ],
       required: [true, 'Action is required.'],
     },

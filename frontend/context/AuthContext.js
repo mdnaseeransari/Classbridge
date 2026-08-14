@@ -20,6 +20,7 @@ function normalizeUser(u) {
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
+  const [requiresPinChange, setRequiresPinChange] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const registerPushToken = async () => {
@@ -61,11 +62,14 @@ export const AuthProvider = ({ children }) => {
         const res = await api.get('/auth/me', {
           headers: { Authorization: `Bearer ${storedToken}` },
         });
-        setUser(normalizeUser(res.data.user));
+        const normalized = normalizeUser(res.data.user);
+        setUser(normalized);
+        setRequiresPinChange(!!normalized?.requiresPinChange);
         registerPushToken();
       } else {
         setToken(null);
         setUser(null);
+        setRequiresPinChange(false);
       }
     } catch (err) {
       console.error('[AUTH_CONTEXT] Auth restore failed:', err?.response?.data || err.message);
@@ -73,6 +77,7 @@ export const AuthProvider = ({ children }) => {
       await storage.deleteItem('userToken');
       setToken(null);
       setUser(null);
+      setRequiresPinChange(false);
     } finally {
       setLoading(false);
     }
@@ -86,12 +91,13 @@ export const AuthProvider = ({ children }) => {
   const loginTeacherStudent = async (phone, pin) => {
     try {
       const res = await api.post('/auth/login/teacher-student', { phone, pin });
-      const { token: newToken, user: userData } = res.data;
+      const { token: newToken, user: userData, requiresPinChange: pinChange } = res.data;
       await storage.setItem('userToken', newToken);
       setToken(newToken);
       setUser(normalizeUser(userData));
+      setRequiresPinChange(!!pinChange);
       registerPushToken();
-      return { success: true, user: normalizeUser(userData) };
+      return { success: true, user: normalizeUser(userData), requiresPinChange: !!pinChange };
     } catch (err) {
       const errorMessage = err?.response?.data?.error || 'Login failed. Please check your network connection.';
       return { success: false, error: errorMessage };
@@ -106,6 +112,7 @@ export const AuthProvider = ({ children }) => {
       await storage.setItem('userToken', newToken);
       setToken(newToken);
       setUser(normalizeUser(userData));
+      setRequiresPinChange(false);
       registerPushToken();
       return { success: true, user: normalizeUser(userData) };
     } catch (err) {
@@ -134,7 +141,13 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setToken(null);
       setUser(null);
+      setRequiresPinChange(false);
     }
+  };
+
+  const checkPinChangeDone = async () => {
+    setRequiresPinChange(false);
+    await checkAuth();
   };
 
   return (
@@ -143,12 +156,14 @@ export const AuthProvider = ({ children }) => {
         token,
         user,
         setUser,
+        requiresPinChange,
         loading,
         loginTeacherStudent,
         loginAdmin,
         signup,
         logout,
         checkAuth,
+        checkPinChangeDone,
       }}
     >
       {children}

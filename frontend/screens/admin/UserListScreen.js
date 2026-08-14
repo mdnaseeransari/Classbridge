@@ -18,9 +18,9 @@ import RoleBadge from '../../components/ui/RoleBadge';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+import { usePanel } from '../../context/PanelContext';
 
 const ROLES = ['all', 'teacher', 'student', 'admin'];
-const STATUSES = ['all', 'pending', 'approved', 'rejected'];
 
 function FilterChip({ label, active, onPress }) {
   return (
@@ -59,28 +59,29 @@ function UserRow({ user, onPress }) {
   );
 }
 
-export default function UserListScreen({ navigation }) {
+export default function UserListScreen(props) {
+  const { navigation } = props;
+  const { goBackPanel, navigatePanel } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
 
   const fetchUsers = useCallback(async () => {
     try {
       setError('');
       const params = { page: 1, limit: 100 };
       if (roleFilter !== 'all') params.role = roleFilter;
-      if (statusFilter !== 'all') params.status = statusFilter;
 
       const res = await adminApi.getUsers(params);
       setUsers(res.data.users || []);
     } catch (_err) {
       setError('Failed to load users.');
     }
-  }, [roleFilter, statusFilter]);
+  }, [roleFilter]);
 
   useFocusEffect(
     useCallback(() => {
@@ -96,19 +97,23 @@ export default function UserListScreen({ navigation }) {
   };
 
   const handleUserPress = (user) => {
-    navigation.navigate('UserDetail', { userId: user._id });
+    if (isInline) {
+      navigatePanel('userDetail', { userId: user._id });
+    } else {
+      navigation.navigate('UserDetail', { userId: user._id });
+    }
   };
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+      <View style={[styles.header, isInline && { paddingTop: 14 }]}>
+        <TouchableOpacity onPress={() => isInline ? goBackPanel() : navigation.goBack()} style={{ paddingRight: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Users</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('PendingApprovals')}>
+        <TouchableOpacity onPress={() => isInline ? navigatePanel('pendingApprovals', null) : navigation.navigate('PendingApprovals')}>
           <Ionicons name="time-outline" size={22} color="#ffa726" />
         </TouchableOpacity>
       </View>
@@ -120,10 +125,6 @@ export default function UserListScreen({ navigation }) {
             <Text style={styles.filterLabel}>ROLE:</Text>
             {ROLES.map((r) => (
               <FilterChip key={r} label={r} active={roleFilter === r} onPress={() => setRoleFilter(r)} />
-            ))}
-            <Text style={[styles.filterLabel, { marginLeft: 12 }]}>STATUS:</Text>
-            {STATUSES.map((s) => (
-              <FilterChip key={s} label={s} active={statusFilter === s} onPress={() => setStatusFilter(s)} />
             ))}
           </ScrollView>
         </View>

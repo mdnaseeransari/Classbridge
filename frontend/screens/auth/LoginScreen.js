@@ -87,11 +87,14 @@ export default function LoginScreen({ navigation }) {
               )}
             </TouchableOpacity>
 
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ForgotPin')}
+              style={{ marginTop: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#5288c1', fontSize: 13, fontWeight: '500' }}>Forgot PIN?</Text>
+            </TouchableOpacity>
+ 
             <View style={styles.footerLinks}>
-              <TouchableOpacity onPress={() => navigation.navigate('ForgotRequest', { type: 'pin' })}>
-                <Text style={styles.linkText}>Forgot PIN?</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={{ marginTop: 14 }}>
                 <Text style={styles.secondaryLinkText}>
                   Don't have an account? <Text style={styles.linkBold}>Sign Up</Text>

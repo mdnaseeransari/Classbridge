@@ -23,6 +23,7 @@ import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 import { getSocket } from '../../services/socket';
 import * as ImagePicker from 'expo-image-picker';
+import OfflineBanner from '../../components/ui/OfflineBanner';
 import * as DocumentPicker from 'expo-document-picker';
 import Avatar from '../../components/ui/Avatar';
 
@@ -956,6 +957,7 @@ export default function ChatRoomScreen({ route, navigation, isInline }) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      <OfflineBanner />
       <View style={styles.header}>
         {!isInline && (
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 10 }}>

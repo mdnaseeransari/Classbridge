@@ -13,8 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 import RoleBadge from '../../components/ui/RoleBadge';
+import OfflineBanner from '../../components/ui/OfflineBanner';
+import { usePanel } from '../../context/PanelContext';
 
-export default function AdminDashboardScreen({ navigation }) {
+export default function AdminDashboardScreen(props) {
+  const { navigation } = props;
+  const { goBackPanel, navigatePanel } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
   const { user, logout } = useContext(AuthContext);
   const isSuperAdmin = user?.role === 'superadmin';
   const [pendingReportCount, setPendingReportCount] = useState(0);
@@ -67,10 +72,16 @@ export default function AdminDashboardScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
+      <OfflineBanner />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isInline && { paddingTop: 14 }]}>
+        {isInline && (
+          <TouchableOpacity onPress={goBackPanel} style={{ paddingRight: 8 }}>
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        )}
         <Text style={styles.headerTitle}>Admin Portal</Text>
         <TouchableOpacity onPress={logout}>
           <Text style={styles.logoutText}>Log Out</Text>
@@ -88,26 +99,26 @@ export default function AdminDashboardScreen({ navigation }) {
           {/* User Management Section */}
           <Text style={styles.sectionHeader}>USER MANAGEMENT</Text>
 
-          <FeatureRow
+           <FeatureRow
             title="All Users"
             subtitle="Browse, filter, and manage accounts"
             iconName="people"
             iconBg="#5288c1"
-            onPress={() => navigation.navigate('UserList')}
+            onPress={() => isInline ? navigatePanel('userList', null) : navigation.navigate('UserList')}
           />
           <FeatureRow
             title="Pending Approvals"
             subtitle="Review and approve new registration requests"
             iconName="time"
             iconBg="#ffa726"
-            onPress={() => navigation.navigate('PendingApprovals')}
+            onPress={() => isInline ? navigatePanel('pendingApprovals', null) : navigation.navigate('PendingApprovals')}
           />
           <FeatureRow
             title="Reset Requests"
             subtitle="Approve forgot password/PIN requests"
             iconName="key"
             iconBg="#2b5278"
-            onPress={() => navigation.navigate('AdminResetRequests')}
+            onPress={() => isInline ? navigatePanel('resetRequests', null) : navigation.navigate('ResetRequests')}
             badgeCount={pendingResetCount}
           />
 
@@ -118,7 +129,7 @@ export default function AdminDashboardScreen({ navigation }) {
             subtitle="Review reported message violations"
             iconName="warning"
             iconBg="#e53935"
-            onPress={() => navigation.navigate('AdminReports')}
+            onPress={() => isInline ? navigatePanel('reports', null) : navigation.navigate('AdminReports')}
             badgeCount={pendingReportCount}
           />
 
@@ -131,7 +142,7 @@ export default function AdminDashboardScreen({ navigation }) {
                 subtitle="Add a new administrator directly"
                 iconName="person-add"
                 iconBg="#4dbd74"
-                onPress={() => navigation.navigate('CreateAdmin')}
+                onPress={() => isInline ? navigatePanel('createAdmin', null) : navigation.navigate('CreateAdmin')}
               />
             </>
           )}

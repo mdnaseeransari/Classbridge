@@ -306,9 +306,12 @@ async function createGroup(req, res) {
     }
 
     const { name, participantIds = [] } = req.body;
+    const groupName = name;
 
-    if (!name || !String(name).trim()) {
-      return res.status(400).json({ error: 'Group name is required.' });
+    if (!groupName || groupName.trim().length < 2 || groupName.trim().length > 50) {
+      return res.status(400).json({ 
+        error: 'Group name must be between 2 and 50 characters.' 
+      });
     }
 
     // Combine creator with unique provided participant IDs
@@ -378,8 +381,11 @@ async function updateGroup(req, res) {
     }
 
     const { name } = req.body;
-    if (!name || !String(name).trim()) {
-      return res.status(400).json({ error: 'Group name is required.' });
+    const groupName = name;
+    if (!groupName || groupName.trim().length < 2 || groupName.trim().length > 50) {
+      return res.status(400).json({ 
+        error: 'Group name must be between 2 and 50 characters.' 
+      });
     }
 
     const conversation = await Conversation.findOne({ _id: req.params.id, type: 'group' });
@@ -918,8 +924,13 @@ async function editMessage(req, res) {
     const { id } = req.params;
     const { content } = req.body;
 
-    if (!content || !String(content).trim()) {
-      return res.status(400).json({ error: 'Message content is required.' });
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: 'Message cannot be empty.' });
+    }
+    if (content.length > 4000) {
+      return res.status(400).json({ 
+        error: 'Message too long. Maximum 4000 characters.' 
+      });
     }
 
     const message = await Message.findById(id);

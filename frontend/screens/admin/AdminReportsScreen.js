@@ -15,8 +15,12 @@ import api from '../../services/api';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+import { usePanel } from '../../context/PanelContext';
 
-export default function AdminReportsScreen({ navigation }) {
+export default function AdminReportsScreen(props) {
+  const { navigation } = props;
+  const { goBackPanel, navigatePanel } = usePanel();
+  const isInline = Platform.OS === 'web' && props.isInline;
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,11 +44,16 @@ export default function AdminReportsScreen({ navigation }) {
   useEffect(() => {
     fetchReports(true);
 
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchReports(false);
-    });
+    let unsubscribe;
+    if (navigation && typeof navigation.addListener === 'function') {
+      unsubscribe = navigation.addListener('focus', () => {
+        fetchReports(false);
+      });
+    }
 
-    return unsubscribe;
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [statusFilter, navigation]);
 
   const handleRefresh = () => {
@@ -70,7 +79,7 @@ export default function AdminReportsScreen({ navigation }) {
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.75}
-        onPress={() => navigation.navigate('AdminReportDetail', { reportId: item._id })}
+        onPress={() => isInline ? navigatePanel('reportDetail', { reportId: item._id }) : navigation.navigate('AdminReportDetail', { reportId: item._id })}
       >
         <View style={styles.cardHeader}>
           <StatusBadge status={item.status} />
@@ -99,10 +108,10 @@ export default function AdminReportsScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#17212b" />
+      {!isInline && <StatusBar barStyle="light-content" backgroundColor="#17212b" />}
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 8 }}>
+      <View style={[styles.header, isInline && { paddingTop: 14 }]}>
+        <TouchableOpacity onPress={() => isInline ? goBackPanel() : navigation.goBack()} style={{ paddingRight: 8 }}>
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reports Queue</Text>
