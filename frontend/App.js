@@ -87,13 +87,12 @@ export default function App() {
           ...Feather.font,
           ...Entypo.font,
           ...AntDesign.font,
-          Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
-          MaterialIcons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf'),
-          MaterialCommunityIcons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
-          FontAwesome: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
-          Feather: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf'),
-          Entypo: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf'),
-          AntDesign: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf'),
+          Ionicons: Ionicons.font.ionicons,
+          MaterialIcons: MaterialIcons.font.material,
+          MaterialCommunityIcons: MaterialCommunityIcons.font['material-community'],
+          Feather: Feather.font.feather,
+          Entypo: Entypo.font.entypo,
+          AntDesign: AntDesign.font.anticon,
         });
       } catch (_e) {
       } finally {
