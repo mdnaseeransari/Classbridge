@@ -79,30 +79,24 @@ export default function App() {
   useEffect(() => {
     async function loadFonts() {
       try {
-        // Step 1: Load critical primary icon fonts first for instant app launch (< 80ms)
         await Font.loadAsync({
           ...Ionicons.font,
-          ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
+          ...MaterialIcons.font,
+          ...MaterialCommunityIcons.font,
+          ...FontAwesome.font,
+          ...Feather.font,
+          ...Entypo.font,
+          ...AntDesign.font,
           Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
-          material: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf'),
           MaterialIcons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf'),
-          feather: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf'),
-          Feather: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf'),
-        });
-        setFontsLoaded(true);
-
-        // Step 2: Non-blocking background load for secondary icon fonts
-        Font.loadAsync({
-          'material-community': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
           MaterialCommunityIcons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
           FontAwesome: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
-          fontawesome: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
-          entypo: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf'),
+          Feather: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf'),
           Entypo: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf'),
-          anticon: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf'),
           AntDesign: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf'),
         });
       } catch (_e) {
+      } finally {
         setFontsLoaded(true);
       }
     }
